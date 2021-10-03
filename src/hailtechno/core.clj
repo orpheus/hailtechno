@@ -5,12 +5,23 @@
             [compojure.route :as route]
             [compojure.handler :as handler]
             [compojure.response :as response]
+            [clojure.java.io :as io]
+            [ring.middleware.params :refer [wrap-params]]
+            [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             ))
+
+(defn upload-route []
+  (wrap-multipart-params
+   (POST "/upload" {params :params}
+         (io/copy (io/file (get-in params [:file :tempfile]))
+                  (io/file (str "./uploads/" (get-in params [:file :filename]))))
+         {:status 200
+          :headers {"Content-Type" "text/plain"}
+          :body (str "File saved")})))
 
 (defroutes main-routes
   (GET "/" [] (str "What's up stunna"))
-  (route/resources "/")
-  (route/not-found "Page not found"))
+  (upload-route))
 
 
 (def app
