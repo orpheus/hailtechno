@@ -6,10 +6,18 @@
             [compojure.handler :as handler]
             [compojure.response :as response]
             [clojure.java.io :as io]
+            [next.jdbc :as jdbc]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.util.response :refer [response bad-request]]
             ))
+
+(def db {:dbtype "postgres"
+         :dbname "hailtechno"
+         :user "postgres"})
+
+(def ds (jdbc/get-datasource db))
+
 
 (defn copy-file-local [file-map]
   "Takes a file map from a http request body and copys the files locally."
@@ -62,4 +70,6 @@
 
 
 (def app
-  (-> (handler/site main-routes)))
+  (do
+    (println (jdbc/execute! ds ["select * from tracks"]))
+    (-> (handler/site main-routes))))
