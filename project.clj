@@ -7,6 +7,7 @@
                  [com.github.seancorfield/next.jdbc "1.2.724"]
                  [org.clojure/clojure "1.10.1"]
                  [org.postgresql/postgresql "42.2.23"]
+                 [funcool/datoteka "2.0.0"]
                  [ring/ring-core "1.8.2"]
                  [ring/ring-jetty-adapter "1.8.2"]
                  [ring/ring-devel "1.8.2"]
