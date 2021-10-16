@@ -1,11 +1,12 @@
 (ns hailtechno.core
   (:gen-class)
-  (:use compojure.core)
+  (:use [compojure.core])
   (:require [compojure.core :refer :all]
             [compojure.route :as route]
             [compojure.handler :as handler]
             [compojure.response :as response]
             [clojure.java.io :as io]
+            [datoteka.core :as datoteka]
             [next.jdbc :as jdbc]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
@@ -18,14 +19,38 @@
 
 (def ds (jdbc/get-datasource db))
 
+(defn db-setup []
+  (jdbc/execute! ds ["
+CREATE TABLE IF NOT EXISTS tracks(
+  id varchar primary key,
+  name varchar,
+  filename varchar,
+  artist varchar,
+  album varchar
+)"]))
 
-(defn copy-file-local [file-map]
-  "Takes a file map from a http request body and copys the files locally."
-  (let [file (get file-map :tempfile)
-        filename (get file-map :filename)]
-    (io/copy (io/file file)
-             (io/file (str "./uploads/" filename)))
-    ))
+(defn save-file-to-fs [File destination]
+  "Saves a File to a filesystem path"
+  (let [dst (str "tracks/" destination)]
+    (datoteka/create-dir (datoteka/parent dst))
+    (io/copy File
+             (io/file dst))))
+
+(defn create-file-path [params]
+  (clojure.string/join "/" (remove clojure.string/blank? params)))
+
+(defn store-file [req-body]
+  (let [file-map (req-body :file)
+        filename (file-map :filename)
+        track-name (req-body :name)
+        artist (req-body :artist)
+        album (req-body :album)
+        fs-dir (create-file-path [artist album])
+        fs-path (create-file-path [artist album filename])]
+    (save-file-to-fs (file-map :tempfile)
+                     fs-path)
+    ;; todo: Save filepath and metadata to postgres
+    (println "Saved file to filesystem")))
 
 (defn validate-file-upload [file-attr]
   "Checks the request body file attribute for proper schema. Returns nil if OK.
@@ -35,6 +60,7 @@
       (if-not (nil? file)
         (if (vector? file)
           "Expected file attribute to be a vector of maps. Found vector inside vector.\n")
+        ;; todo: test file type/content type
         (recur rest)))
     (if-not (map? file-attr)
       "Expected `file` attibute on request body to be a map.\n")))
@@ -43,6 +69,7 @@
   "Parses request body file attribute to upload files."
   (let [file-attr (params :file)
         valid-res (validate-file-upload file-attr)]
+    (println params)
     (if-not (nil? valid-res)
       valid-res
      (if (vector? file-attr)
@@ -50,9 +77,9 @@
          (if-not file
            (println "Uploaded files.")
            (do
-             (copy-file-local file)
+             (store-file params)
              (recur rest))))
-      (copy-file-local file-attr)))))
+       (store-file params)))))
 
 (defn upload-route []
   "Route handler to upload multipart files."
@@ -71,5 +98,5 @@
 
 (def app
   (do
-    (println (jdbc/execute! ds ["select * from tracks"]))
+    (db-setup)
     (-> (handler/site main-routes))))
