@@ -149,8 +149,8 @@ CREATE TABLE IF NOT EXISTS tracks(
                (if-not (nil? error)
                  (bad-request error)
                  ;; If no error, call callback with metadata
-                 (callback (agg-metadata (:params request) filepaths) request)))))
-         (response "OK"))))
+                 (callback (agg-metadata (:params request) filepaths) request)))
+             (response "OK"))))))
 
 (defn track-route []
   (file-upload-route
