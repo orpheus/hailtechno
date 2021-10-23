@@ -6,6 +6,7 @@
             [compojure.handler :as handler]
             [compojure.response :as response]
             [clojure.java.io :as io]
+            [clojure.string :as str]
             [datoteka.core :as datoteka]
             [next.jdbc :as jdbc]
             [ring.middleware.params :refer [wrap-params]]
@@ -29,8 +30,9 @@ CREATE TABLE IF NOT EXISTS tracks(
   album varchar
 )"]))
 
-(defn save-file-to-fs [File destination]
+(defn save-file-to-fs
   "Saves a File to a filesystem path"
+  [File destination]
   (let [dst (str "tracks/" destination)]
     (datoteka/create-dir (datoteka/parent dst))
     (io/copy File
@@ -39,64 +41,62 @@ CREATE TABLE IF NOT EXISTS tracks(
 (defn create-file-path [params]
   (clojure.string/join "/" (remove clojure.string/blank? params)))
 
-(defn store-file [req-body]
-  (let [file-map (req-body :file)
-        filename (file-map :filename)
-        track-name (req-body :name)
-        artist (req-body :artist)
-        album (req-body :album)
-        fs-dir (create-file-path [artist album])
-        fs-path (create-file-path [artist album filename])]
-    (save-file-to-fs (file-map :tempfile)
-                     fs-path)
-    ;; todo: Save filepath and metadata to postgres
-    (println "Saved file to filesystem")))
+(defn path-interpolation
+  "
+  Simple string interpolation for creating dynamic filepaths.
 
-(defn validate-file-upload [file-attr]
-  "Checks the request body file attribute for proper schema. Returns nil if OK.
-   Or returns string error message."
-  (if (vector? file-attr)
-    (loop [[file & rest] file-attr]
-      (if-not (nil? file)
-        (if (vector? file)
-          "Expected file attribute to be a vector of maps. Found vector inside vector.\n")
-        ;; todo: test file type/content type
-        (recur rest)))
-    (if-not (map? file-attr)
-      "Expected `file` attibute on request body to be a map.\n")))
+  toDo: check for `?` option fields and require non-optionals.
+  "
+  [path fields params]
+  (loop [[field & rest] fields
+         _path path]
+    (let [regx (re-pattern (str "\\{" field "\\}"))
+          value (params (keyword field) "")]
+      (if field
+        (recur rest (clojure.string/replace _path regx value))
+        ;; for now remove double slashes if a field wasn't found
+        ;; and set to all lowercase
+        (-> _path
+            (clojure.string/replace #"//" "/")
+            clojure.string/lower-case)
+        ))))
 
-(defn handle-file-upload [params]
-  "Parses request body file attribute to upload files."
-  (let [file-attr (params :file)
-        valid-res (validate-file-upload file-attr)]
-    (println params)
-    (if-not (nil? valid-res)
-      valid-res
-     (if (vector? file-attr)
-       (loop [[file & rest] file-attr]
-         (if-not file
-           (println "Uploaded files.")
-           (do
-             (store-file params)
-             (recur rest))))
-       (store-file params)))))
+(defn strip-underscore-prefix [str]
+  (clojure.string/replace str #"^_" ""))
 
-(defn upload-route []
-  "Route handler to upload multipart files."
-  (wrap-multipart-params
-   (POST "/upload" {params :params}
-         (println "POST /upload")
-         (let [res (handle-file-upload params)]
-           (if (nil? res) (response "File(s) uploaded\n")
-               (bad-request res)))
-         )))
-
-(defn is-valid-req
-  "Returns null if valid. Returns error message if not."
-  [params config])
+(defn wo-undescore-prefix [vec]
+  (map (partial strip-underscore-prefix) vec))
 
 (defn store-files [params config]
-  {:filepath "some/file/path"})
+  (let [filepath (path-interpolation (:filepath config)
+                                     (wo-undescore-prefix (:metadata config))
+                                     params)]
+    [{:filepath filepath} nil]))
+
+(defn validate-req-params
+  "
+  `params`::Map
+  `config`::Map => {:metadata Vector<String>}
+
+  Checks the `params` map for required fields as found in the `:metadata`
+  vector of the `config` map denoted by strings that start with `_`, an underscore.
+  "
+  [params config]
+  (loop [[param & rest] (cons "_file" (:metadata config))]
+    (if (and param ;; not nil
+             (str/starts-with? param "_") ;; starts with `_`
+             (not (params (keyword (subs param 1))))) ;; and is not in the req body
+      (str "Missing required request body parameter: " (subs param 1))
+      ;; else recur
+      (if rest (recur rest)))))
+
+;; Returns: Vector<Filemap, Error>
+(defn validate-and-store [req-params config]
+  (if-let [error (validate-req-params req-params config)]
+    [nil error]
+    (try (store-files req-params config)
+         (catch Exception e [nil (str "Unknown exception in storing file(s)"
+                                      (.getMessage e))]))))
 
 (defn agg-metadata [params filepaths]
   {})
@@ -111,7 +111,7 @@ CREATE TABLE IF NOT EXISTS tracks(
     :filepath String \"path/to/save/file\"
     :metadata Vector::String [\"trackname\" \"artistname\"]
   }
-  callback: Fn (fn [Map {:keys [trackname artistname filepath]}]) ()
+  callback: Fn (fn [Map {:keys [trackname artistname filemap]}]) ()
 
   The `file-upload-route` looks for the `file` key to exist as part of the req
   params. This `file` must have a `content-type` that matches one of
@@ -139,31 +139,25 @@ CREATE TABLE IF NOT EXISTS tracks(
   [controller config callback]
   (wrap-multipart-params
    (POST controller request
-         (println request)
-         ;; Validate request body - returns null or error message
-         (let [error (is-valid-req (:params request) config)]
-           (if-not (nil? error)
+         (let [[filemap error] (validate-and-store (:params request) config)]
+           (println "filemap: " filemap)
+           (if error
              (bad-request error)
-             ;; If no error, store file
-             (let [[filepaths error] (store-files (:params request) config)]
-               (if-not (nil? error)
-                 (bad-request error)
-                 ;; If no error, call callback with metadata
-                 (callback (agg-metadata (:params request) filepaths) request)))
-             (response "OK"))))))
+             (callback (agg-metadata (:paramms request) filemap) request)))
+         )))
 
 (defn track-route []
   (file-upload-route
    "/track"
    {:accepts ["audio/mpeg" "audio/vnd.wav" "audio/mp4"]
-    :filepath "track/{artist}/{album?}"
+    :filepath "track/{artist}/{album}"
     :metadata ["_name" "_artist" "album"]}
-   (fn [{:keys [name artist album filepath]}]
-     (println name artist album filepath))))
+   (fn [{:keys [name artist album filepath]} request]
+     ;; (println name artist album filepath)
+     (response "OK"))))
 
 (defroutes main-routes
   (GET "/" [] (str "What's up stunna"))
-  (upload-route)
   (track-route))
 
 
