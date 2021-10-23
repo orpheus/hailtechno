@@ -32,47 +32,66 @@ CREATE TABLE IF NOT EXISTS tracks(
 
 (defn save-file-to-fs
   "Saves a File to a filesystem path"
-  [File destination]
-  (let [dst (str "tracks/" destination)]
-    (datoteka/create-dir (datoteka/parent dst))
-    (io/copy File
-             (io/file dst))))
+  [File filepath filename]
+  (datoteka/create-dir filepath)
+  (io/copy File (io/file (str filepath "/" filename))))
 
-(defn create-file-path [params]
-  (clojure.string/join "/" (remove clojure.string/blank? params)))
-
-(defn path-interpolation
+(defn field-to-re
   "
-  Simple string interpolation for creating dynamic filepaths.
-
-  toDo: check for `?` option fields and require non-optionals.
+  Make a regex patter out of given field surrounded by brackets.
+  Used for string interpolation.
   "
-  [path fields params]
-  (loop [[field & rest] fields
-         _path path]
-    (let [regx (re-pattern (str "\\{" field "\\}"))
-          value (params (keyword field) "")]
-      (if field
-        (recur rest (clojure.string/replace _path regx value))
-        ;; for now remove double slashes if a field wasn't found
-        ;; and set to all lowercase
-        (-> _path
-            (clojure.string/replace #"//" "/")
-            clojure.string/lower-case)
-        ))))
+  [field]
+  (re-pattern (str "\\{" field "\\}")))
+
+(defn interpolate-string
+  "
+  Interpolate string using brackets `{someVar}`.
+  example:
+
+  (interpolate-string \"/tracks/{artist}/{album}\"
+                      {:artist porter, :album nurture)
+
+  => \"/tracks/porter/nurture\"
+
+  If value in map is nill, will substitute with empty string.
+  "
+  [string values]
+  (let [matcher (re-matcher #"\{(.*?)\}" string)]
+    (loop [match (re-find matcher)
+           re-string string]
+      (if-not match
+        re-string
+        (recur (re-find matcher)
+               (clojure.string/replace re-string
+                                       (field-to-re (second match))
+                                       (-> match
+                                           second
+                                           keyword
+                                           (values ""))))))))
+
+(defn interpolate-path
+  "
+  String interpolation with double slash removal set to lowercase.
+  "
+  [path params]
+  (-> (interpolate-string path params)
+      (clojure.string/replace #"//" "/")
+      clojure.string/lower-case
+      .trim
+      (.replaceAll "\\s+" "_")))
 
 (defn strip-underscore-prefix [str]
   (clojure.string/replace str #"^_" ""))
 
-(defn wo-undescore-prefix [vec]
-  (map (partial strip-underscore-prefix) vec))
+(defn store-file [params config]
+  (let [filepath (interpolate-path (:filepath config) params)
+        filename (get-in params [:file :filename])
+        File     (get-in params [:file :tempfile])]
+    (save-file-to-fs File filepath filename)
+    [{:filepath filepath, :filename filename :file File} nil]))
 
-(defn store-files [params config]
-  (let [filepath (path-interpolation (:filepath config)
-                                     (wo-undescore-prefix (:metadata config))
-                                     params)]
-    [{:filepath filepath} nil]))
-
+;; toDo: validate content-type
 (defn validate-req-params
   "
   `params`::Map
@@ -94,12 +113,25 @@ CREATE TABLE IF NOT EXISTS tracks(
 (defn validate-and-store [req-params config]
   (if-let [error (validate-req-params req-params config)]
     [nil error]
-    (try (store-files req-params config)
-         (catch Exception e [nil (str "Unknown exception in storing file(s)"
+    (try (store-file req-params config)
+         (catch Exception e [nil (str "Unknown exception in storing file(s): "
                                       (.getMessage e))]))))
 
-(defn agg-metadata [params filepaths]
-  {})
+(defn agg-metadata
+  "
+  Aggregate data for return value/as argument to the file handler callback.
+  Merges the filemap with the param values as defined in the `:metedata`
+  vector of the config map.
+  "
+  [params filemap config]
+  (loop [[field & rest] (:metadata config)
+         agg filemap]
+    (if-not field
+      agg
+      (let [key (keyword (strip-underscore-prefix field))
+            val (key params)]
+        (recur rest (if val (assoc agg key val) agg))
+        ))))
 
 (defn file-upload-route
   "Creates a configurable file upload route with validation.
@@ -140,20 +172,19 @@ CREATE TABLE IF NOT EXISTS tracks(
   (wrap-multipart-params
    (POST controller request
          (let [[filemap error] (validate-and-store (:params request) config)]
-           (println "filemap: " filemap)
            (if error
              (bad-request error)
-             (callback (agg-metadata (:paramms request) filemap) request)))
-         )))
+             (callback (agg-metadata (:params request) filemap config) request))))))
 
 (defn track-route []
   (file-upload-route
    "/track"
    {:accepts ["audio/mpeg" "audio/vnd.wav" "audio/mp4"]
-    :filepath "track/{artist}/{album}"
-    :metadata ["_name" "_artist" "album"]}
-   (fn [{:keys [name artist album filepath]} request]
+    :filepath "tracks/{artist}/{album}"
+    :metadata ["_artist" "album" "_trackname"]}
+   (fn [{:keys [artist trackname filename]} request]
      ;; (println name artist album filepath)
+     (println artist filename trackname)
      (response "OK"))))
 
 (defroutes main-routes
