@@ -11,7 +11,7 @@
             [next.jdbc :as jdbc]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
-            [ring.util.response :refer [response bad-request]]
+            [ring.util.response :refer [response bad-request response?]]
             ))
 
 (def db {:dbtype "postgres"
@@ -68,7 +68,8 @@ CREATE TABLE IF NOT EXISTS tracks(
                                        (-> match
                                            second
                                            keyword
-                                           (values ""))))))))
+                                           values
+                                           (or ""))))))))
 
 (defn interpolate-path
   "
@@ -174,7 +175,12 @@ CREATE TABLE IF NOT EXISTS tracks(
          (let [[filemap error] (validate-and-store (:params request) config)]
            (if error
              (bad-request error)
-             (callback (agg-metadata (:params request) filemap config) request))))))
+             (let [res (callback (agg-metadata (:params request) filemap config)
+                                 request)]
+               (if (response? res)
+                 res
+                 {:status 500
+                  :body "Callback passed to `file-upload-route` returned an invalid ring response map."})))))))
 
 (defn fsroot [path]
   (str "fsroot" path))
@@ -182,15 +188,40 @@ CREATE TABLE IF NOT EXISTS tracks(
 (defn apiroot [controller]
   (str "/api" controller))
 
+(def trackpath (fsroot "/tracks/{artist}/{album}"))
+(def mixpath   (fsroot "/mixes/{artist}"))
+(def imgpath   (fsroot "/images/{artist}"))
+(def vidpath   (fsroot "/video/{artist}"))
+
 (defn upload-track-route []
   (file-upload-route
    (apiroot "/track")
    {:accepts ["audio/mpeg" "audio/vnd.wav" "audio/mp4"]
-    :filepath (fsroot "/tracks/{artist}/{album}")
+    :filepath trackpath
     :metadata ["_artist" "album" "_trackname"]}
    (fn [{:keys [artist trackname filename]} request]
      (println artist filename trackname)
      (response "OK"))))
+
+(defn get-track-by-path
+  "
+  WIP: Respond with a track given a set of parameters in the query-string.
+  toDo: validate request params and if file exists.
+    - can use/steal fns from here as reference
+  https://github.com/ring-clojure/ring/blob/master/ring-core/src/ring/util/response.clj
+  "
+  []
+  (GET (apiroot "/track") [artist album trackname]
+       (let [path (str (interpolate-path trackpath
+                                         {:artist artist :album album})
+                       trackname)]
+         (println path)
+         (response (io/input-stream (io/file path))))))
+
+(defn get-track-by-id []
+  (GET (apiroot "/track/:id") [id]
+       (println id)
+       (response "OK")))
 
 (defn upload-mix-route []
   (file-upload-route
@@ -221,6 +252,8 @@ CREATE TABLE IF NOT EXISTS tracks(
 
 (defroutes main-routes
   (upload-track-route)
+  (get-track-by-id)
+  (get-track-by-path)
   (upload-mix-route)
   (upload-image-route)
   (upload-video-route))
