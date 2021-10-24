@@ -176,20 +176,54 @@ CREATE TABLE IF NOT EXISTS tracks(
              (bad-request error)
              (callback (agg-metadata (:params request) filemap config) request))))))
 
-(defn track-route []
+(defn fsroot [path]
+  (str "fsroot" path))
+
+(defn apiroot [controller]
+  (str "/api" controller))
+
+(defn upload-track-route []
   (file-upload-route
-   "/track"
+   (apiroot "/track")
    {:accepts ["audio/mpeg" "audio/vnd.wav" "audio/mp4"]
-    :filepath "tracks/{artist}/{album}"
+    :filepath (fsroot "/tracks/{artist}/{album}")
     :metadata ["_artist" "album" "_trackname"]}
    (fn [{:keys [artist trackname filename]} request]
-     ;; (println name artist album filepath)
      (println artist filename trackname)
      (response "OK"))))
 
+(defn upload-mix-route []
+  (file-upload-route
+   (apiroot "/mix")
+   {:accepts ["audio/mpeg" "audio/vnd.wav" "audio/mp4"]
+    :filepath (fsroot "/mixes/{artist}")
+    :metadata ["_artist" "_mixname"]}
+   (fn [{:keys [artist mixname filename filepath]} request]
+     (response "OK"))))
+
+(defn upload-image-route []
+  (file-upload-route
+   (apiroot "/image")
+   {:accepts ["image/png" "image/jpeg" "image/jpg"]
+    :filepath (fsroot "/images/{artist}")
+    :metadata ["_artist" "_imgname"]}
+   (fn [{:keys [artist imgname filename filepath]} request]
+     (response "OK"))))
+
+(defn upload-video-route []
+  (file-upload-route
+   (apiroot "/video")
+   {:accepts ["video/mp4"]
+    :filepath (fsroot "/video/{artist}")
+    :metadata ["_artist" "_videoname"]}
+   (fn [{:keys [artist videoname filename filepath]} request]
+     (response "OK"))))
+
 (defroutes main-routes
-  (GET "/" [] (str "What's up stunna"))
-  (track-route))
+  (upload-track-route)
+  (upload-mix-route)
+  (upload-image-route)
+  (upload-video-route))
 
 
 (def app
