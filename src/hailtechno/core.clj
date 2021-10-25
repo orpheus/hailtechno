@@ -59,14 +59,12 @@ CREATE TABLE IF NOT EXISTS video(
 
 
 (defn filter-map-vals
-  "
-  Filters out unspecifed key-values on a map.
-  `map` is a map
-  `keys` is a set
+  "Filters out unspecifed key-values on a map.
   Returns a map with only the keys described in `keys` and their values.
+  `obj` is a clojure map and `keys` is a clojure set.
   "
-  [map keys]
-  (into {} (filter (fn [key-val] (keys (first key-val))) map)))
+  [obj keys]
+  (into {} (filter (fn [key-val] (keys (first key-val))) obj)))
 
 (def sql-track-cols #{:id :filepath :filename :artist :album :trackname})
 (defn save-track [track]
@@ -117,6 +115,7 @@ CREATE TABLE IF NOT EXISTS video(
 
 ;; toDo: remove filename and take full filepath.
 ;; -> use parent fn to create the dir
+;; (-> filepath File. .exists)
 (defn save-file-to-fs
   "Saves a File to a filesystem path"
   [File filepath filename]
@@ -124,25 +123,20 @@ CREATE TABLE IF NOT EXISTS video(
   (io/copy File (io/file (str filepath "/" filename))))
 
 (defn field-to-re
-  "
-  Make a regex patter out of given field surrounded by brackets.
-  Used for string interpolation.
-  "
+  "Make a regex patter out of given field surrounded by brackets.
+  Used for string interpolation."
   [field]
   (re-pattern (str "\\{" field "\\}")))
 
-(defn interpolate-string
-  "
-  Interpolate string using brackets `{someVar}`.
+(defn ^String interpolate-string
+  "Interpolate string using brackets `{someVar}`.
+
   example:
-
-  (interpolate-string \"/tracks/{artist}/{album}\"
-                      {:artist porter, :album nurture)
-
+  => (interpolate-string \"/tracks/{artist}/{album}\"
+                         {:artist porter, :album nurture)
   => \"/tracks/porter/nurture\"
 
-  If value in map is nill, will substitute with empty string.
-  "
+  If value in map is nill, will substitute with empty string."
   [string values]
   (let [matcher (re-matcher #"\{(.*?)\}" string)]
     (loop [match (re-find matcher)
@@ -158,10 +152,8 @@ CREATE TABLE IF NOT EXISTS video(
                                            values
                                            (or ""))))))))
 
-(defn interpolate-path
-  "
-  String interpolation with double slash removal set to lowercase.
-  "
+(defn ^String interpolate-path
+  "String interpolation with double slash removal set to lowercase."
   [path params]
   (-> (interpolate-string path params)
       (clojure.string/replace #"//" "/")
@@ -182,13 +174,10 @@ CREATE TABLE IF NOT EXISTS video(
 
 ;; toDo: validate content-type
 (defn validate-req-params
-  "
-  `params`::Map
-  `config`::Map => {:metadata Vector<String>}
+  " `params`::Map | `config`::Map => {:metadata Vector[String]}
 
   Checks the `params` map for required fields as found in the `:metadata`
-  vector of the `config` map denoted by strings that start with `_`, an underscore.
-  "
+  vector of the `config` map denoted by strings that start with `_`, an underscore."
   [params config]
   (loop [[param & rest] (cons "_file" (:metadata config))]
     (if (and param ;; not nil
@@ -207,11 +196,9 @@ CREATE TABLE IF NOT EXISTS video(
                                       (.getMessage e))]))))
 
 (defn agg-metadata
-  "
-  Aggregate data for return value/as argument to the file handler callback.
+  "Aggregate data for return value/as argument to the file handler callback.
   Merges the filemap with the param values as defined in the `:metedata`
-  vector of the config map.
-  "
+  vector of the config map."
   [params filemap config]
   (loop [[field & rest] (:metadata config)
          agg filemap]
@@ -293,14 +280,12 @@ CREATE TABLE IF NOT EXISTS video(
      (response "Uploaded."))))
 
 (defn get-track-by-path
-  "
-  WIP: Respond with a track given a set of parameters in the query-string.
+  "WIP: Respond with a track given a set of parameters in the query-string.
   toDo: validate request params and if file exists.
     - can use/steal fns from here as reference
   https://github.com/ring-clojure/ring/blob/master/ring-core/src/ring/util/response.clj
 
-  Accepts `artist` `album` and `trackname` as query parameters.
-  "
+  Accepts `artist` `album` and `trackname` as query parameters."
   []
   (GET (apiroot "/track") [artist album trackname]
        (let [path (str (interpolate-path trackpath
