@@ -9,6 +9,7 @@
             [clojure.string :as str]
             [datoteka.core :as datoteka]
             [next.jdbc :as jdbc]
+            [next.jdbc.sql.builder :as sql-builder]
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.util.response :refer [response bad-request response?]]
@@ -21,15 +22,101 @@
 (def ds (jdbc/get-datasource db))
 
 (defn db-setup []
+  (println "Setting up database.")
   (jdbc/execute! ds ["
+CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\";
+
 CREATE TABLE IF NOT EXISTS tracks(
-  id varchar primary key,
-  name varchar,
+  id uuid primary key DEFAULT uuid_generate_v4(),
+  filepath varchar unique not null,
   filename varchar,
   artist varchar,
-  album varchar
-)"]))
+  album varchar,
+  trackname varchar);
 
+CREATE TABLE IF NOT EXISTS mixes(
+  id uuid primary key DEFAULT uuid_generate_v4(),
+  filepath varchar unique not null,
+  filename varchar,
+  artist varchar,
+  mixname varchar);
+
+CREATE TABLE IF NOT EXISTS images(
+  id uuid primary key DEFAULT uuid_generate_v4(),
+  filepath varchar unique not null,
+  filename varchar,
+  artist varchar,
+  imgname varchar);
+
+CREATE TABLE IF NOT EXISTS video(
+  id uuid primary key DEFAULT uuid_generate_v4(),
+  filepath varchar unique not null,
+  filename varchar,
+  artist varchar,
+  vidname varchar);
+"])
+  (println "Database setup."))
+
+
+(defn filter-map-vals
+  "
+  Filters out unspecifed key-values on a map.
+  `map` is a map
+  `keys` is a set
+  Returns a map with only the keys described in `keys` and their values.
+  "
+  [map keys]
+  (into {} (filter (fn [key-val] (keys (first key-val))) map)))
+
+(def sql-track-cols #{:id :filepath :filename :artist :album :trackname})
+(defn save-track [track]
+  (jdbc/execute-one! ds
+                     (sql-builder/for-insert
+                      "tracks"
+                      (filter-map-vals track sql-track-cols)
+                      {})))
+
+(defn db-get-track
+  ([id] (db-get-track id {}))
+  ([id opts]
+   (jdbc/execute-one! ds ["select * from tracks where id = (?)::uuid" id] opts)))
+
+(defn db-get-image
+  ([id] (db-get-image id {}))
+  ([id opts]
+   (jdbc/execute-one! ds ["select * from images where id = (?)::uuid" id] opts)))
+
+;; (defn db-get-by-id
+;;   ([table id] (db-get-by-id table id nil))
+;;   ([table id opts]
+;;    (jdbc/execute-one! ds ["select * from ? where id = (?)::uuid" (quoted/postgres table) id] opts)))
+
+(def sql-mix-cols #{:id :filepath :filename :artist :mixname})
+(defn save-mix [mix]
+  (jdbc/execute-one! ds
+                     (sql-builder/for-insert
+                      "mixes"
+                      (filter-map-vals mix sql-mix-cols)
+                      {})))
+
+(def sql-img-cols #{:id :filepath :filename :artist :imgname})
+(defn save-image [img]
+  (jdbc/execute-one! ds
+                     (sql-builder/for-insert
+                      "images"
+                      (filter-map-vals img sql-img-cols)
+                      {})))
+
+(def sql-vid-cols #{:id :filepath :filename :artist :vidname})
+(defn save-video [video]
+  (jdbc/execute-one! ds
+                     (sql-builder/for-insert
+                      "images"
+                      (filter-map-vals video sql-vid-cols)
+                      {})))
+
+;; toDo: remove filename and take full filepath.
+;; -> use parent fn to create the dir
 (defn save-file-to-fs
   "Saves a File to a filesystem path"
   [File filepath filename]
@@ -85,6 +172,7 @@ CREATE TABLE IF NOT EXISTS tracks(
 (defn strip-underscore-prefix [str]
   (clojure.string/replace str #"^_" ""))
 
+;; toDo: Check if file already exists
 (defn store-file [params config]
   (let [filepath (interpolate-path (:filepath config) params)
         filename (get-in params [:file :filename])
@@ -193,15 +281,16 @@ CREATE TABLE IF NOT EXISTS tracks(
 (def imgpath   (fsroot "/images/{artist}"))
 (def vidpath   (fsroot "/video/{artist}"))
 
+;; save the actual filepath to the db, not the parent dir
 (defn upload-track-route []
   (file-upload-route
    (apiroot "/track")
    {:accepts ["audio/mpeg" "audio/vnd.wav" "audio/mp4"]
     :filepath trackpath
     :metadata ["_artist" "album" "_trackname"]}
-   (fn [{:keys [artist trackname filename]} request]
-     (println artist filename trackname)
-     (response "OK"))))
+   (fn [track-data request]
+     (save-track track-data)
+     (response "Uploaded."))))
 
 (defn get-track-by-path
   "
@@ -209,6 +298,8 @@ CREATE TABLE IF NOT EXISTS tracks(
   toDo: validate request params and if file exists.
     - can use/steal fns from here as reference
   https://github.com/ring-clojure/ring/blob/master/ring-core/src/ring/util/response.clj
+
+  Accepts `artist` `album` and `trackname` as query parameters.
   "
   []
   (GET (apiroot "/track") [artist album trackname]
@@ -220,8 +311,10 @@ CREATE TABLE IF NOT EXISTS tracks(
 
 (defn get-track-by-id []
   (GET (apiroot "/track/:id") [id]
-       (println id)
-       (response "OK")))
+       (if-let [track (db-get-track id)]
+         (response (io/input-stream
+                    (io/file (str (track :tracks/filepath) "/" (track :tracks/filename)))))
+         )))
 
 (defn upload-mix-route []
   (file-upload-route
@@ -229,8 +322,17 @@ CREATE TABLE IF NOT EXISTS tracks(
    {:accepts ["audio/mpeg" "audio/vnd.wav" "audio/mp4"]
     :filepath (fsroot "/mixes/{artist}")
     :metadata ["_artist" "_mixname"]}
-   (fn [{:keys [artist mixname filename filepath]} request]
+   (fn [mix-data _]
+     (save-mix mix-data)
      (response "OK"))))
+
+
+(defn get-mix-by-id []
+  (GET (apiroot "/mix/:id") [id]
+       (if-let [record (db-get-by-id "mixes" id)]
+         (response (io/input-stream
+                    (io/file (str (record :mixes/filepath) "/" (record :mixes/filename)))))
+         )))
 
 (defn upload-image-route []
   (file-upload-route
@@ -238,8 +340,16 @@ CREATE TABLE IF NOT EXISTS tracks(
    {:accepts ["image/png" "image/jpeg" "image/jpg"]
     :filepath (fsroot "/images/{artist}")
     :metadata ["_artist" "_imgname"]}
-   (fn [{:keys [artist imgname filename filepath]} request]
+   (fn [img-data _]
+     (save-image img-data)
      (response "OK"))))
+
+(defn get-image-by-id []
+  (GET (apiroot "/image/:id") [id]
+       (if-let [record (db-get-image id)]
+         (response (io/input-stream
+                    (io/file (str (record :images/filepath) "/" (record :images/filename)))))
+         )))
 
 (defn upload-video-route []
   (file-upload-route
@@ -247,7 +357,8 @@ CREATE TABLE IF NOT EXISTS tracks(
    {:accepts ["video/mp4"]
     :filepath (fsroot "/video/{artist}")
     :metadata ["_artist" "_videoname"]}
-   (fn [{:keys [artist videoname filename filepath]} request]
+   (fn [vid-data _]
+     (save-video vid-data)
      (response "OK"))))
 
 (defroutes main-routes
@@ -256,7 +367,8 @@ CREATE TABLE IF NOT EXISTS tracks(
   (get-track-by-path)
   (upload-mix-route)
   (upload-image-route)
-  (upload-video-route))
+  (upload-video-route)
+  (get-image-by-id))
 
 
 (def app
