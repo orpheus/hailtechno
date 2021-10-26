@@ -13,7 +13,8 @@
             [ring.middleware.params :refer [wrap-params]]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.util.response :refer [response bad-request response?]]
-            ))
+            )
+  (:import (java.io File)))
 
 (def db {:dbtype "postgres"
          :dbname "hailtechno"
@@ -113,14 +114,16 @@ CREATE TABLE IF NOT EXISTS video(
                       (filter-map-vals video sql-vid-cols)
                       {})))
 
-;; toDo: remove filename and take full filepath.
-;; -> use parent fn to create the dir
-;; (-> filepath File. .exists)
 (defn save-file-to-fs
-  "Saves a File to a filesystem path"
-  [File filepath filename]
-  (datoteka/create-dir filepath)
-  (io/copy File (io/file (str filepath "/" filename))))
+  "Saves a File to a filesystem path and creates the intermediate directories."
+  [^File File ^String filepath]
+  (let [file-to-create (File. filepath)]
+    (if (.exists file-to-create)
+      (str filepath " already exists.")
+      (let [parent-file (-> file-to-create .getParent File.)]
+        (if-not (.isDirectory parent-file)
+          (.mkdirs parent-file))
+        (io/copy File file-to-create)))))
 
 (defn field-to-re
   "Make a regex patter out of given field surrounded by brackets.
@@ -164,15 +167,15 @@ CREATE TABLE IF NOT EXISTS video(
 (defn strip-underscore-prefix [str]
   (clojure.string/replace str #"^_" ""))
 
-;; toDo: Check if file already exists
 (defn store-file [params config]
-  (let [filepath (interpolate-path (:filepath config) params)
+  (let [dirpath (interpolate-path (:filepath config) params)
         filename (get-in params [:file :filename])
-        File     (get-in params [:file :tempfile])]
-    (save-file-to-fs File filepath filename)
-    [{:filepath filepath, :filename filename :file File} nil]))
+        ;; toDo: clean up
+        filepath (str/replace (str dirpath (File/separator) filename) #"//" "/")
+        tempfile     (get-in params [:file :tempfile])]
+    (let [error (save-file-to-fs tempfile filepath)]
+      [{:filepath filepath, :filename filename :file tempfile} error])))
 
-;; toDo: validate content-type
 (defn validate-req-params
   " `params`::Map | `config`::Map => {:metadata Vector[String]}
 
@@ -185,7 +188,13 @@ CREATE TABLE IF NOT EXISTS video(
              (not (params (keyword (subs param 1))))) ;; and is not in the req body
       (str "Missing required request body parameter: " (subs param 1))
       ;; else recur
-      (if rest (recur rest)))))
+      (if rest (recur rest))))
+  (let [{{content-type :content-type} :file} params
+        accepts (:accepts config)]
+    (if-not (set? accepts)
+      "Interval server error: file-upload-route config.accepts must be a set."
+      (if-not (accepts content-type)
+        (str "File content-type must be one of: " (str/join ", " accepts))))))
 
 ;; Returns: Vector<Filemap, Error>
 (defn validate-and-store [req-params config]
@@ -215,7 +224,7 @@ CREATE TABLE IF NOT EXISTS video(
 
   controller: String
   config: Map {
-    :accepts Vector::String (content-type) [\"audio/mpeg\" \"audio/vnd.wav\"]
+    :accepts Set::String (content-type) #(\"audio/mpeg\" \"audio/vnd.wav\")
     :filepath String \"path/to/save/file\"
     :metadata Vector::String [\"trackname\" \"artistname\"]
   }
@@ -223,7 +232,7 @@ CREATE TABLE IF NOT EXISTS video(
 
   The `file-upload-route` looks for the `file` key to exist as part of the req
   params. This `file` must have a `content-type` that matches one of
-  the values inside the `:accepts` vector
+  the values inside the `:accepts` set
 
   The `:filepath` is the location where the file will be stored.
   Accepts templates such as 'file/{trackname}' where `{trackname}` will
@@ -239,7 +248,7 @@ CREATE TABLE IF NOT EXISTS video(
   how thpe callback fn will receive this parameter, e.g. the underscore will
   be stripped after it has verified that value is non-null and non-empty.
 
-  The  `callback` parameter is a function that takes a map of metadata from
+  The `callback` parameter is a function that takes a map of metadata from
   the request and vars calculated during execution for the user to use to
   perform side effects like update a databas. It takes as a second argument
   the actual http `request`.
@@ -249,6 +258,8 @@ CREATE TABLE IF NOT EXISTS video(
    (POST controller request
          (let [[filemap error] (validate-and-store (:params request) config)]
            (if error
+             ;; toDo: Let the fns down low send back a proper request so they
+             ;; can provide more accurate status codes.
              (bad-request error)
              (let [res (callback (agg-metadata (:params request) filemap config)
                                  request)]
@@ -272,7 +283,7 @@ CREATE TABLE IF NOT EXISTS video(
 (defn upload-track-route []
   (file-upload-route
    (apiroot "/track")
-   {:accepts ["audio/mpeg" "audio/vnd.wav" "audio/mp4"]
+   {:accepts #{"audio/mpeg" "audio/vnd.wav" "audio/mp4"}
     :filepath trackpath
     :metadata ["_artist" "album" "_trackname"]}
    (fn [track-data request]
@@ -280,49 +291,50 @@ CREATE TABLE IF NOT EXISTS video(
      (response "Uploaded."))))
 
 (defn get-track-by-path
-  "WIP: Respond with a track given a set of parameters in the query-string.
-  toDo: validate request params and if file exists.
-    - can use/steal fns from here as reference
-  https://github.com/ring-clojure/ring/blob/master/ring-core/src/ring/util/response.clj
-
-  Accepts `artist` `album` and `trackname` as query parameters."
+  "Accepts `artist` `album` and `trackname` as query parameters to locate and
+  retrieve a file on the file system."
   []
   (GET (apiroot "/track") [artist album trackname]
        (let [path (str (interpolate-path trackpath
                                          {:artist artist :album album})
-                       trackname)]
-         (println path)
-         (response (io/input-stream (io/file path))))))
+                       (File/separator)
+                       trackname)
+             file (File. path)]
+         (if (.isDirectory file)
+           (bad-request (str "File not found: " path " is a directory."))
+           (if (.exists file)
+             (response (io/input-stream file))
+             (bad-request (str path " does not exist.")))))))
 
 (defn get-track-by-id []
   (GET (apiroot "/track/:id") [id]
        (if-let [track (db-get-track id)]
          (response (io/input-stream
-                    (io/file (str (track :tracks/filepath) "/" (track :tracks/filename)))))
-         )))
+                    (io/file (track :tracks/filepath)))))))
 
 (defn upload-mix-route []
   (file-upload-route
    (apiroot "/mix")
-   {:accepts ["audio/mpeg" "audio/vnd.wav" "audio/mp4"]
+   {:accepts #{"audio/mpeg" "audio/vnd.wav" "audio/mp4"}
     :filepath (fsroot "/mixes/{artist}")
     :metadata ["_artist" "_mixname"]}
    (fn [mix-data _]
+     ;; toDo: add rollback if exception
      (save-mix mix-data)
      (response "OK"))))
 
 
-(defn get-mix-by-id []
-  (GET (apiroot "/mix/:id") [id]
-       (if-let [record (db-get-by-id "mixes" id)]
-         (response (io/input-stream
-                    (io/file (str (record :mixes/filepath) "/" (record :mixes/filename)))))
-         )))
+;; (defn get-mix-by-id []
+;;   (GET (apiroot "/mix/:id") [id]
+;;        (if-let [record (db-get-by-id "mixes" id)]
+;;          (response (io/input-stream
+;;                     (io/file (str (record :mixes/filepath) "/" (record :mixes/filename)))))
+;;          )))
 
 (defn upload-image-route []
   (file-upload-route
    (apiroot "/image")
-   {:accepts ["image/png" "image/jpeg" "image/jpg"]
+   {:accepts #{"image/png" "image/jpeg" "image/jpg"}
     :filepath (fsroot "/images/{artist}")
     :metadata ["_artist" "_imgname"]}
    (fn [img-data _]
@@ -339,7 +351,7 @@ CREATE TABLE IF NOT EXISTS video(
 (defn upload-video-route []
   (file-upload-route
    (apiroot "/video")
-   {:accepts ["video/mp4"]
+   {:accepts #{"video/mp4"}
     :filepath (fsroot "/video/{artist}")
     :metadata ["_artist" "_videoname"]}
    (fn [vid-data _]
