@@ -365,8 +365,8 @@ CREATE TABLE IF NOT EXISTS video(
   (upload-mix-route)
   (upload-image-route)
   (upload-video-route)
-  (get-image-by-id))
-
+  (get-image-by-id)
+  (route/not-found "<h1>404</h1>"))
 
 (def app
   (do
