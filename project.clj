@@ -3,11 +3,13 @@
   :url "http://example.com/FIXME"
   :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
             :url "https://www.eclipse.org/legal/epl-2.0/"}
-  :dependencies [[compojure "1.6.2"]
+  :dependencies [[buddy/buddy-auth "3.0.1"]
+                 [compojure "1.6.2"]
                  [com.github.seancorfield/next.jdbc "1.2.724"]
+                 [funcool/datoteka "2.0.0"]
+                 [ovotech/ring-jwt "2.3.0"]
                  [org.clojure/clojure "1.10.1"]
                  [org.postgresql/postgresql "42.2.23"]
-                 [funcool/datoteka "2.0.0"]
                  [ring/ring-core "1.8.2"]
                  [ring/ring-jetty-adapter "1.8.2"]
                  [ring/ring-devel "1.8.2"]
