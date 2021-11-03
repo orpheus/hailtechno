@@ -1,6 +1,8 @@
 (ns hailtechno.db
-  (:require [next.jdbc :as jdbc]
-            [next.jdbc.sql.builder :as sql-builder]))
+  (:require [hailtechno.util :refer [current-timestamp]]
+            [next.jdbc :as jdbc]
+            [next.jdbc.sql.builder :as sql-builder]
+            ))
 
 (def db {:dbtype "postgres"
          :dbname "hailtechno"
@@ -41,9 +43,43 @@ CREATE TABLE IF NOT EXISTS video(
   filename varchar,
   artist varchar,
   vidname varchar);
+
+CREATE TABLE IF NOT EXISTS upload_access_token(
+  id uuid primary key DEFAULT uuid_generate_v4(),
+  uploads smallint DEFAULT 0,
+  max_uploads smallint,
+  exp_date timestamp with time zone,
+  created_date timestamp with time zone,
+  name varchar unique,
+  type varchar,
+  notes varchar
+);
 "])
   (println "Database setup."))
 
+
+
+(defn create-access-token [access-token]
+  (jdbc/execute-one! ds
+                     (sql-builder/for-insert
+                      "upload_access_token"
+                      (assoc access-token :created_date (current-timestamp))
+                      {})))
+
+
+(defn get-access-token-by-id
+  ([id] (get-access-token-by-id id {}))
+  ([id options]
+   (jdbc/execute-one! ds
+                      ["select * from upload_access_token where id = (?)::uuid" id]
+                      options)))
+
+(defn get-access-token-by-name
+  ([name] (get-access-token-by-name name {}))
+  ([name opts]
+   (jdbc/execute-one! ds
+                      ["select * from upload_access_token where name = ?" name]
+                      opts)))
 
 (defn filter-map-vals
   "Filters out unspecifed key-values on a map.

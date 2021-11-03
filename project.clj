@@ -9,6 +9,7 @@
                  [funcool/datoteka "2.0.0"]
                  [ovotech/ring-jwt "2.3.0"]
                  [org.clojure/clojure "1.10.1"]
+                 [org.clojure/data.json "2.4.0"]
                  [org.postgresql/postgresql "42.2.23"]
                  [ring/ring-core "1.8.2"]
                  [ring/ring-jetty-adapter "1.8.2"]

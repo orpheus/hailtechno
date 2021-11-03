@@ -120,22 +120,24 @@
       agg
       (let [key (keyword (strip-underscore-prefix field))
             val (key params)]
-        (recur rest (if val (assoc agg key val) agg))
-        ))))
+        (recur rest (if val (assoc agg key val) agg))))))
 
-(defn file-upload-route
-  "Creates a configurable file upload route with validation.
-  Returns a composure route wrapped in ring's multipart middleware.
+(defn handle-upload
+  "Configurable file upload used in conjuction with an http handler.
+  Takes a an http `request` map (ring) and custom map with a `config`
+  and `callback` key. Using the config map, the `handle-upload` fn
+  performs validation on the request ensuring there is a `file` property
+  present in the request as well as ensuring that other required fields
+  exist as specified in the `config` map.
 
-  controller: String
-  config: Map {
-    :accepts Set::String (content-type) #(\"audio/mpeg\" \"audio/vnd.wav\")
+  config: {
+    :accepts Set::content-types #(\"audio/mpeg\" \"audio/vnd.wav\")
     :filepath String \"path/to/save/file\"
     :metadata Vector::String [\"trackname\" \"artistname\"]
   }
   callback: Fn (fn [Map {:keys [trackname artistname filemap]}]) ()
 
-  The `file-upload-route` looks for the `file` key to exist as part of the req
+  The function looks for the `file` key to exist as part of the req
   params. This `file` must have a `content-type` that matches one of
   the values inside the `:accepts` set
 
@@ -147,7 +149,7 @@
 
   The `:metadata` is a list of values to look up in the `params` map of
   the request body to be used as templates in the filepath and as arguments
-  for the callback. The `file-upload-route` will only look at the variables
+  for the callback. This function will only look at the variables
   in the params map that are defined in the `:metadata` field. To mark
   a field as requied, prefix it with an underscore. This will not change
   how thpe callback fn will receive this parameter, e.g. the underscore will
@@ -158,17 +160,15 @@
   perform side effects like update a databas. It takes as a second argument
   the actual http `request`.
   "
-  [controller config callback]
-  (wrap-multipart-params
-   (POST controller request
-         (let [[filemap error] (validate-and-store (:params request) config)]
-           (if error
-             ;; toDo: Let the fns down low send back a proper request so they
-             ;; can provide more accurate status codes.
-             (bad-request error)
-             (let [res (callback (agg-metadata (:params request) filemap config)
-                                 request)]
-               (if (response? res)
-                 res
-                 {:status 500
-                  :body "Callback passed to `file-upload-route` returned an invalid ring response map."})))))))
+  [request {:keys [config callback]}]
+  (let [[filemap error] (validate-and-store (:params request) config)]
+    (if error
+      ;; toDo: Let the fns down low send back a proper request so they
+      ;; can provide more accurate status codes.
+      (bad-request error)
+      (let [res (callback (agg-metadata (:params request) filemap config)
+                          request)]
+        (if (response? res)
+          res
+          {:status 500
+           :body "Callback passed to `fsf/handle-upload` returned an invalid ring response map."})))))
