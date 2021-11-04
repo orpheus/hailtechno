@@ -5,3 +5,6 @@
 
 (defn rand-uuid []
   (java.util.UUID/randomUUID))
+
+(defn strip-ns [some-map]
+  (reduce-kv (fn [m k v] (assoc m (name k) v)) {} some-map))
