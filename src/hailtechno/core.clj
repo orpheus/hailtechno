@@ -48,32 +48,57 @@
   {:config {:accepts #{"audio/mpeg" "audio/wave" "audio/mp4"}
             :filepath trackpath
             :metadata ["_artist" "album" "_trackname"]}
-   :callback (fn [track-data request]
-               (db/save-track track-data)
+   :callback (fn [{:keys [trackname artist album filepath filename]}
+                  {access-token :ht-access-token
+                   email :email}]
+               (db/save-track {:trackname trackname
+                               :artist artist
+                               :album album
+                               :filepath filepath
+                               :filename filename}
+                              access-token)
                (response "Uploaded."))})
 
 (def fsf-backend-mix-upload
   {:config {:accepts #{"audio/mpeg" "audio/wave" "audio/mp4"}
             :filepath (fsf/fsroot "/mixes/{artist}")
             :metadata ["_artist" "_mixname"]}
-   :callback (fn [mix-data _]
-               (db/save-mix mix-data)
+   :callback (fn [{:keys [artist mixname filepath filename]}
+                  {access-token :ht-access-token
+                   email :email}]
+               (db/save-mix {:artist artist
+                             :mixname mixname
+                             :filepath filepath
+                             :filename filename}
+                            access-token)
                (response "OK"))})
 
 (def fsf-backend-video-upload
   {:config {:accepts #{"video/mp4"}
             :filepath (fsf/fsroot "/video/{artist}")
             :metadata ["_artist" "_videoname"]}
-   :callback (fn [vid-data _]
-               (db/save-video vid-data)
+   :callback (fn [{:keys [artist videoname filepath filename]}
+                  {access-token :ht-access-token
+                   email :email}]
+               (db/save-video {:artist artist
+                               :videoname videoname
+                               :filepath filepath
+                               :filename}
+                              access-token)
                (response "Uploaded."))})
 
 (def fsf-backend-image-upload
   {:config {:accepts #{"image/png" "image/jpeg" "image/jpg"}
             :filepath (fsf/fsroot "/images/{artist}")
             :metadata ["_artist" "_imgname"]}
-   :callback (fn [img-data _]
-               (db/save-image img-data)
+   :callback (fn [{:keys [artist imgname filepath filename]}
+                  {access-token :ht-access-token
+                   email :email}]
+               (db/save-image {:artist artist
+                               :imgname imgname
+                               :filepath filepath
+                               :filename filename}
+                              access-token)
                (response "Uploaded."))})
 
 (def track-route
@@ -107,19 +132,17 @@
 
 (defn get-track-by-id []
   (GET (apiroot "/track/:id") [id]
-       (if-let [track (db/get-track id)]
+       (if-let [track (db/get-track-by-id id)]
          (response (io/input-stream
-                    (io/file (track :tracks/filepath)))))))
-
-
+                    (io/file (track :track/filepath)))))))
 
 (defn get-image-by-id []
   (GET (apiroot "/image/:id") [id]
-       (if-let [record (db/get-image id)]
+       (if-let [record (db/get-image-by-id id)]
          (response (io/input-stream
-                    (io/file (str (record :images/filepath)
+                    (io/file (str (record :image/filepath)
                                   "/"
-                                  (record :images/filename))))))))
+                                  (record :image/filename))))))))
 
 (defn validate-access-token-route []
   (armor/with-access-code
