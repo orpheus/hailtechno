@@ -62,6 +62,12 @@
 (defn strip-underscore-prefix [str]
   (clojure.string/replace str #"^_" ""))
 
+(defn delete-file [filepath]
+  (let [file (File. filepath)]
+    (.delete file)
+    ;; only deletes parent folder if empty
+    (.delete (.getParentFile file))))
+
 (defn store-file [params config]
   (let [dirpath (interpolate-path (:filepath config) params)
         filename (get-in params [:file :filename])
@@ -157,18 +163,18 @@
 
   The `callback` parameter is a function that takes a map of metadata from
   the request and vars calculated during execution for the user to use to
-  perform side effects like update a databas. It takes as a second argument
+  perform side effects like update a database. It takes as a second argument
   the actual http `request`.
   "
   [request {:keys [config callback]}]
   (let [[filemap error] (validate-and-store (:params request) config)]
-    (if error
-      ;; toDo: Let the fns down low send back a proper request so they
-      ;; can provide more accurate status codes.
-      (bad-request error)
-      (let [res (callback (agg-metadata (:params request) filemap config)
-                          request)]
-        (if (response? res)
-          res
-          {:status 500
-           :body "Callback passed to `fsf/handle-upload` returned an invalid ring response map."})))))
+    (if error (bad-request error)
+        (try
+          (let [res (callback (agg-metadata (:params request) filemap config) request)]
+            (if (response? res) res
+                {:status 500
+                 :body "Callback passed to `fsf/handle-upload` returned an invalid ring response map."}))
+          (catch Exception e
+            (delete-file (:filepath filemap))
+            {:status 500
+             :body (.getMessage e)})))))
