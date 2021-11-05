@@ -177,4 +177,4 @@
           (catch Exception e
             (delete-file (:filepath filemap))
             {:status 500
-             :body (.getMessage e)})))))
+             :body (str "Error during fsf callback: "(.getMessage e))})))))

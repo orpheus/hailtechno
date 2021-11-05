@@ -28,7 +28,7 @@
 
 (defn upload-route [handler]
   (-> handler
-      wrap-multipart-params
+      wrap-multipart-params ;; doesn't fail if this is missing
       armor/with-access-code))
 
 (defn authorize-and-upload [request fsf-backend]
@@ -40,6 +40,7 @@
 (defn create-upload-route [controller fsf-backend]
   (upload-route
    (POST controller request
+         (println "Start authorize-and-upload")
          (authorize-and-upload request fsf-backend))))
 
 ;; add rollbacks if exception in callbacks
@@ -51,12 +52,13 @@
    :callback (fn [{:keys [trackname artist album filepath filename]}
                   {access-token :ht-access-token
                    email :email}]
-               (db/save-track {:trackname trackname
-                               :artist artist
-                               :album album
-                               :filepath filepath
-                               :filename filename}
-                              access-token)
+               (db/save-file-upload {:display_name trackname
+                                     :artist artist
+                                     :album album
+                                     :filepath filepath
+                                     :filename filename
+                                     :access_code (:id access-token)
+                                     :file_type_id 0})
                (response "Uploaded."))})
 
 (def fsf-backend-mix-upload
@@ -66,11 +68,12 @@
    :callback (fn [{:keys [artist mixname filepath filename]}
                   {access-token :ht-access-token
                    email :email}]
-               (db/save-mix {:artist artist
-                             :mixname mixname
-                             :filepath filepath
-                             :filename filename}
-                            access-token)
+               (db/save-file-upload {:artist artist
+                                     :display_name mixname
+                                     :filepath filepath
+                                     :filename filename
+                                     :access_code (:id access-token)
+                                     :file_type_id 1})
                (response "OK"))})
 
 (def fsf-backend-video-upload
@@ -80,11 +83,12 @@
    :callback (fn [{:keys [artist videoname filepath filename]}
                   {access-token :ht-access-token
                    email :email}]
-               (db/save-video {:artist artist
-                               :videoname videoname
-                               :filepath filepath
-                               :filename}
-                              access-token)
+               (db/save-file-upload {:artist artist
+                                     :display_name videoname
+                                     :filepath filepath
+                                     :filename filename
+                                     :access_code (:id access-token)
+                                     :file_type_id 2})
                (response "Uploaded."))})
 
 (def fsf-backend-image-upload
@@ -94,11 +98,12 @@
    :callback (fn [{:keys [artist imgname filepath filename]}
                   {access-token :ht-access-token
                    email :email}]
-               (db/save-image {:artist artist
-                               :imgname imgname
-                               :filepath filepath
-                               :filename filename}
-                              access-token)
+               (db/save-file-upload {:artist artist
+                                     :display_name imgname
+                                     :filepath filepath
+                                     :filename filename
+                                     :access_code (:id access-token)
+                                     :file_type_id 3})
                (response "Uploaded."))})
 
 (def track-route
@@ -130,19 +135,11 @@
              (response (io/input-stream file))
              (bad-request (str path " does not exist.")))))))
 
-(defn get-track-by-id []
-  (GET (apiroot "/track/:id") [id]
-       (if-let [track (db/get-track-by-id id)]
+(defn get-file-by-id []
+  (GET (apiroot "/file/:id") [id]
+       (if-let [file-upload (db/get-file-by-id id)]
          (response (io/input-stream
-                    (io/file (track :track/filepath)))))))
-
-(defn get-image-by-id []
-  (GET (apiroot "/image/:id") [id]
-       (if-let [record (db/get-image-by-id id)]
-         (response (io/input-stream
-                    (io/file (str (record :image/filepath)
-                                  "/"
-                                  (record :image/filename))))))))
+                    (io/file (file-upload :filepath)))))))
 
 (defn validate-access-token-route []
   (armor/with-access-code
@@ -165,8 +162,7 @@
   video-route)
 
 (defroutes public-routes
-  (get-track-by-id)
-  (get-image-by-id))
+  (get-file-by-id))
 
 (defroutes all-routes
   upload-routes
@@ -176,6 +172,4 @@
   (route/not-found "<h1>404</h1>"))
 
 (def app
-  (do
-    (db/setup)
-    (-> (handler/site all-routes))))
+  (do (-> (handler/site all-routes))))
