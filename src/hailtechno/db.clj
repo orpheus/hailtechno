@@ -25,8 +25,7 @@
         (log/debugf "JDBC Results [%s]." results)
         results))
     (catch Exception e
-      (println e)
-      (log/error e))))
+      (throw e))))
 
 (defn execute!
   [sql]
@@ -36,7 +35,7 @@
       (when (not= nil results)
         (log/debugf "JDBC Results [%s]." results)
         results))
-    (catch Exception e (log/error e))))
+    (catch Exception e (throw e))))
 
 ;; Access Tokens
 (defn create-access-token [obj]
@@ -71,3 +70,15 @@ select * from vw_access_token_usage where access_code = (?)::uuid" access-code])
 
 (defn get-file-by-id [id]
   (execute-one! ["select * from file_upload where id = ?" id]))
+
+(defn get-tracks []
+  (execute! ["select * from file_upload where file_type_id = 0"]))
+
+(defn get-mixes []
+  (execute! ["select * from file_upload where file_type_id = 1"]))
+
+(defn get-images []
+  (execute! ["select * from file_upload where file_type_id = 2"]))
+
+(defn get-video []
+  (execute! ["select * from file_upload where file_type_id = 3"]))

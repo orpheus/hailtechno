@@ -135,11 +135,47 @@
              (response (io/input-stream file))
              (bad-request (str path " does not exist.")))))))
 
+(defn file-to-dto [file-upload]
+  (apply dissoc file-upload [:filepath :access_code]))
+
+(defn files-to-dto [file-uploads]
+  (map file-to-dto file-uploads))
+
+(defn internal-server-error [exception]
+  {:status 500
+   :body (.getMessage exception)})
+
+(defn get-files-from-db [db-getter]
+  (try {:status 200
+        :headers {"Content-Type" "application/json"}
+        :body (json/write-str (files-to-dto (db-getter)))}
+       (catch Exception e
+         (internal-server-error e))))
+
+(defn get-tracks []
+  (GET (apiroot "/tracks") _
+       (get-files-from-db db/get-tracks)))
+
+(defn get-mixes []
+  (GET (apiroot "/mixes") _
+       (get-files-from-db db/get-mixes)))
+
+(defn get-images []
+  (GET (apiroot "/images") _
+       (get-files-from-db db/get-images)))
+
+(defn get-video []
+  (GET (apiroot "/video") _
+       (get-files-from-db db/get-video)))
+
 (defn get-file-by-id []
   (GET (apiroot "/file/:id") [id]
-       (if-let [file-upload (db/get-file-by-id id)]
-         (response (io/input-stream
-                    (io/file (file-upload :filepath)))))))
+       (try
+         (response (some->> (db/get-file-by-id id)
+                            io/file
+                            io/input-stream))
+         (catch Exception e
+           (internal-server-error e)))))
 
 (defn validate-access-token-route []
   (armor/with-access-code
@@ -162,7 +198,12 @@
   video-route)
 
 (defroutes public-routes
-  (get-file-by-id))
+  (get-file-by-id)
+  (get-tracks)
+  (get-mixes)
+  (get-images)
+  (get-video)
+  )
 
 (defroutes all-routes
   upload-routes
