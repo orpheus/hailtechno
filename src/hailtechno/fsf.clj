@@ -14,7 +14,7 @@
   [^File File ^String filepath]
   (let [file-to-create (File. filepath)]
     (if (.exists file-to-create)
-      (str filepath " already exists.")
+      "File already exists."
       (let [parent-file (-> file-to-create .getParent File.)]
         (if-not (.isDirectory parent-file)
           (.mkdirs parent-file))

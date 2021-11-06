@@ -176,16 +176,21 @@
        (get-files-from-db db/get-video)))
 
 (defn file-response [file-upload]
-  (-> response (some->> (:filepath file-upload)
-                        io/file
-                        io/input-stream)
+  (-> (some->> (:filepath file-upload)
+                  io/file
+                  io/input-stream)
       ;; toDo: save content-type to db and send back here
+      response
       (assoc :headers {"Content-Type" ""})))
 
 (defn get-file-by-id []
   (GET (apiroot "/file/:id") [id]
        (try
-         (file-response (db/get-file-by-id id))
+         (let [file-upload (db/get-file-by-id id)
+               response (file-response file-upload)]
+           (if-not (:body response)
+             (bad-request (str "File with id " id " not found."))
+             response))
          (catch Exception e
            (internal-server-error e)))))
 
