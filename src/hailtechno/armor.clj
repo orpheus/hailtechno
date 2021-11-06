@@ -61,10 +61,14 @@
           (unauthorized error))))
     (unauthorized)))
 
-(defn with-access-code [handler]
+(defn wrap-access-code [handler]
   (fn [request]
     (let [access-code (second (find-header request "HT-ACCESS-CODE"))]
-      (handler (assoc request
-                      :ht-access-token (validate-access-code access-code))))))
+      (handler (assoc request :ht-access-code access-code)))))
 
-(defn get-access-token [{token :ht-access-token}] token)
+(defn get-access-code [{code :ht-access-code}] code)
+
+(defn validate-access-header [request]
+  (let [access-code (get-access-code request)
+        access-token (validate-access-code access-code)]
+    access-token))

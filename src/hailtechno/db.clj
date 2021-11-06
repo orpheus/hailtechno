@@ -1,5 +1,6 @@
 (ns hailtechno.db
-  (:require [clojure.tools.logging :as log]
+  (:require [clojure.string :as str]
+            [clojure.tools.logging :as log]
             [hailtechno.util :refer [current-timestamp]]
             [next.jdbc :as jdbc]
             [next.jdbc.result-set :as rs]
@@ -37,7 +38,8 @@
         results))
     (catch Exception e (throw e))))
 
-;; Access Tokens
+;; access_token
+
 (defn create-access-token [obj]
   (insert! ds :access_token
            (assoc obj :date_created (current-timestamp))
@@ -60,7 +62,8 @@ select * from vw_access_token_usage where access_code = (?)::uuid" access-code])
 
 (defn get-access-tokens []
   (execute! ["select * from access_token"]))
-;; File Uploads
+
+;; file_upload
 
 (defn save-file-upload [file-upload]
   (insert! ds :file_upload
@@ -82,3 +85,21 @@ select * from vw_access_token_usage where access_code = (?)::uuid" access-code])
 
 (defn get-video []
   (execute! ["select * from file_upload where file_type_id = 3"]))
+
+;; user_account
+
+(defn save-user [email]
+  (insert! ds :user_account {:email email :date_created (current-timestamp)} opts))
+
+(defn get-user [email]
+  (execute-one! ["select * from user_account where email = ?" email]))
+
+(defn force-get-or-save-user [email]
+  (if-not (str/blank? email)
+    (if-let [user (try (get-user (str email)) (catch Exception e nil))]
+      user
+      (try (save-user (str email))
+           (catch Exception e nil)))))
+
+(defn get-users []
+  (execute! ["select * from user_account"]))

@@ -13,8 +13,9 @@
                  [org.postgresql/postgresql "42.2.23"]
                  [org.slf4j/slf4j-log4j12 "1.7.30"]
                  [ring/ring-core "1.8.2"]
+                 [ring/ring-devel "1.8.2"]
                  [ring/ring-jetty-adapter "1.8.2"]
-                 [ring/ring-devel "1.8.2"]]
+                 [ring/ring-json "0.5.1"]]
   :ring {:handler hailtechno.core/app}
   :plugins [[lein-ring "0.12.5"]]
   :main ^:skip-aot hailtechno.core

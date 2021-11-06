@@ -13,9 +13,11 @@
             [hailtechno.db :as db]
             [hailtechno.fsf :as fsf]
             [hailtechno.util :as util]
+            [ring.middleware.json :as ring-json]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.util.response :refer [response bad-request response?]])
-  (:import (java.io File)))
+  (:import (java.io File)
+           (java.util UUID)))
 
 (defn apiroot [controller]
   (str "/api" controller))
@@ -30,15 +32,22 @@
 (def TYPE_IMAGE 2)
 (def TYPE_VIDEO 3)
 
+
 (defn upload-route [handler]
   (-> handler
       wrap-multipart-params ;; doesn't fail if this is missing
-      armor/with-access-code))
+      armor/wrap-access-code))
+
+(defn test-route []
+  (wrap-multipart-params
+   (POST "/api/test" {file :file params :params}
+         (println params)
+         (response "OK"))))
 
 (defn authorize-and-upload [request fsf-backend]
-  (let [authorized-token (:ht-access-token request)]
-    (if (response? authorized-token)
-      authorized-token
+  (let [access-token (armor/validate-access-header request)]
+    (if (response? access-token)
+      access-token
       (fsf/handle-upload request fsf-backend))))
 
 (defn create-upload-route [controller fsf-backend]
@@ -56,65 +65,73 @@
   {:config {:accepts #{"audio/mpeg" "audio/wave" "audio/mp4"}
             :filepath trackpath
             :metadata ["_artist" "album" "_trackname"]}
-   :callback (fn [{:keys [trackname artist album filepath filename content-type]}
-                  {access-token :ht-access-token email :email}]
-               (println content-type)
-               (db/save-file-upload {:display_name trackname
-                                     :artist artist
-                                     :album album
-                                     :filepath filepath
-                                     :filename filename
-                                     :access_code (:id access-token)
-                                     :content_type content-type
-                                     :file_type_id TYPE_TRACK})
+   :callback (fn [{:keys [trackname artist album filepath filename content-type]} request]
+               (let [access-code (armor/get-access-code request)
+                     email (get-in request [:params :email])
+                     account-id (:id (db/force-get-or-save-user email))]
+                 (db/save-file-upload {:display_name trackname
+                                       :artist artist
+                                       :album album
+                                       :filepath filepath
+                                       :filename filename
+                                       :access_code (UUID/fromString access-code)
+                                       :content_type content-type
+                                       :uploaded_by account-id
+                                       :file_type_id TYPE_TRACK}))
                (response "Uploaded."))})
 
 (def fsf-backend-mix-upload
   {:config {:accepts #{"audio/mpeg" "audio/wave" "audio/mp4"}
             :filepath (fsf/fsroot "/mixes/{artist}")
             :metadata ["_artist" "_mixname"]}
-   :callback (fn [{:keys [artist mixname filepath filename content-type]}
-                  {access-token :ht-access-token
-                   email :email}]
-               (db/save-file-upload {:artist artist
-                                     :display_name mixname
-                                     :filepath filepath
-                                     :filename filename
-                                     :access_code (:id access-token)
-                                     :content_type content-type
-                                     :file_type_id TYPE_MIX})
+   :callback (fn [{:keys [artist mixname filepath filename content-type]} request]
+               (let [access-code (armor/get-access-code request)
+                     email (get-in request [:params :email])
+                     account-id (:id (db/force-get-or-save-user email))]
+                 (db/save-file-upload {:artist artist
+                                       :display_name mixname
+                                       :filepath filepath
+                                       :filename filename
+                                       :access_code (UUID/fromString access-code)
+                                       :content_type content-type
+                                       :uploaded_by account-id
+                                       :file_type_id TYPE_MIX}))
                (response "Uploaded."))})
 
 (def fsf-backend-video-upload
   {:config {:accepts #{"video/mp4"}
             :filepath (fsf/fsroot "/video/{artist}")
             :metadata ["_artist" "_videoname"]}
-   :callback (fn [{:keys [artist videoname filepath filename content-type]}
-                  {access-token :ht-access-token
-                   email :email}]
-               (db/save-file-upload {:artist artist
-                                     :display_name videoname
-                                     :filepath filepath
-                                     :filename filename
-                                     :access_code (:id access-token)
-                                     :content_type content-type
-                                     :file_type_id TYPE_VIDEO})
+   :callback (fn [{:keys [artist videoname filepath filename content-type]} request]
+               (let [access-code (armor/get-access-code request)
+                     email (get-in request [:params :email])
+                     account-id (:id (db/force-get-or-save-user email))]
+                 (db/save-file-upload {:artist artist
+                                       :display_name videoname
+                                       :filepath filepath
+                                       :filename filename
+                                       :access_code (UUID/fromString access-code)
+                                       :content_type content-type
+                                       :uploaded_by account-id
+                                       :file_type_id TYPE_VIDEO}))
                (response "Uploaded."))})
 
 (def fsf-backend-image-upload
   {:config {:accepts #{"image/png" "image/jpeg" "image/jpg"}
             :filepath (fsf/fsroot "/images/{artist}")
             :metadata ["_artist" "_imgname"]}
-   :callback (fn [{:keys [artist imgname filepath filename content-type]}
-                  {access-token :ht-access-token
-                   email :email}]
-               (db/save-file-upload {:artist artist
-                                     :display_name imgname
-                                     :filepath filepath
-                                     :filename filename
-                                     :access_code (:id access-token)
-                                     :content_type content-type
-                                     :file_type_id TYPE_IMAGE})
+   :callback (fn [{:keys [artist imgname filepath filename content-type]} request]
+               (let [access-code (armor/get-access-code request)
+                     email (get-in request [:params :email])
+                     account-id (:id (db/force-get-or-save-user email))]
+                 (db/save-file-upload {:artist artist
+                                       :display_name imgname
+                                       :filepath filepath
+                                       :filename filename
+                                       :access_code (UUID/fromString access-code)
+                                       :content_type content-type
+                                       :uploaded_by account-id
+                                       :file_type_id TYPE_IMAGE}))
                (response "Uploaded."))})
 
 (def track-route
@@ -199,11 +216,18 @@
            (internal-server-error e)))))
 
 (defn validate-access-token-route []
-  (armor/with-access-code
-    (POST "/api/access-code/validate" {access-token :ht-access-token}
-          (if (response? access-token)
-            access-token
-            (json/write-str access-token)))))
+  (ring-json/wrap-json-body
+   (armor/wrap-access-code
+    (POST "/api/access-code/validate" request
+          (let [access-token (armor/validate-access-header request)
+                email (get-in request [:body "email"])]
+            ;; just auto-save email addresses for now
+            (db/save-user-if-not-exists email)
+            (if (response? access-token)
+              access-token
+              (-> (json/write-str access-token)
+                  response
+                  (assoc :headers {"Content-Type" "application/json"}))))))))
 
 (defn login-route []
   (auth/with-basic-auth
@@ -225,12 +249,12 @@
   (get-mixes)
   (get-images)
   (get-video)
+  (test-route)
   )
 
 (defroutes all-routes
   upload-routes
   public-routes
-  (login-route)
   (validate-access-token-route)
   (route/not-found "<h1>404</h1>")
   )
