@@ -69,7 +69,7 @@ select * from vw_access_token_usage where access_code = (?)::uuid" access-code])
            opts))
 
 (defn get-file-by-id [id]
-  (execute-one! ["select * from file_upload where id = ?" id]))
+  (execute-one! ["select * from file_upload where id = (?)::int" id]))
 
 (defn get-tracks []
   (execute! ["select * from file_upload where file_type_id = 0"]))
