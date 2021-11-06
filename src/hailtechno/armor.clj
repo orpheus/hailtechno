@@ -22,15 +22,22 @@
     (catch PSQLException e
       (assoc (response "Invalid access code") :status 401))))
 
+(defn get-token-data-from-db [token-id]
+  (try
+    (db/get-access-token-data token-id)
+    (catch PSQLException e
+      (println "PSQLException while getting access-token data: " e))))
+
 (defn is-token-expired? [token]
-  (some? (some->> (:upload_access_token/exp_date token)
+  (some? (some->> (:date_exp token)
                   (.after (util/current-timestamp)))))
 
 (defn is-token-exhausted? [token]
-  (let [{:upload_access_token/keys [infinite uploads max_uploads]} token]
-    (if (nil? max_uploads)
+  (let [{:keys [max_upload_count upload_count]}
+        (get-token-data-from-db (:id token))]
+    (if (nil? max_upload_count)
       false
-      (>= uploads max_uploads))))
+      (>= upload_count max_upload_count))))
 
 (defn is-token-valid? [token]
   (if-not token
@@ -54,10 +61,14 @@
           (unauthorized error))))
     (unauthorized)))
 
-(defn with-access-code [handler]
+(defn wrap-access-code [handler]
   (fn [request]
     (let [access-code (second (find-header request "HT-ACCESS-CODE"))]
-      (handler (assoc request
-                      :ht-access-token (validate-access-code access-code))))))
+      (handler (assoc request :ht-access-code access-code)))))
 
-(defn get-access-token [{token :ht-access-token}] token)
+(defn get-access-code [{code :ht-access-code}] code)
+
+(defn validate-access-header [request]
+  (let [access-code (get-access-code request)
+        access-token (validate-access-code access-code)]
+    access-token))

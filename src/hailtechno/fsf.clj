@@ -14,7 +14,7 @@
   [^File File ^String filepath]
   (let [file-to-create (File. filepath)]
     (if (.exists file-to-create)
-      (str filepath " already exists.")
+      "File already exists."
       (let [parent-file (-> file-to-create .getParent File.)]
         (if-not (.isDirectory parent-file)
           (.mkdirs parent-file))
@@ -123,7 +123,7 @@
   (loop [[field & rest] (:metadata config)
          agg filemap]
     (if-not field
-      agg
+      (assoc agg :content-type (get-in params [:file :content-type]))
       (let [key (keyword (strip-underscore-prefix field))
             val (key params)]
         (recur rest (if val (assoc agg key val) agg))))))
@@ -177,4 +177,4 @@
           (catch Exception e
             (delete-file (:filepath filemap))
             {:status 500
-             :body (.getMessage e)})))))
+             :body (str "Error during fsf callback: "(.getMessage e))})))))
