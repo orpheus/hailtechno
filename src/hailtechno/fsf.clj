@@ -123,7 +123,7 @@
   (loop [[field & rest] (:metadata config)
          agg filemap]
     (if-not field
-      agg
+      (assoc agg :content-type (get-in params [:file :content-type]))
       (let [key (keyword (strip-underscore-prefix field))
             val (key params)]
         (recur rest (if val (assoc agg key val) agg))))))

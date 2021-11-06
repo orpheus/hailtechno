@@ -56,15 +56,16 @@
   {:config {:accepts #{"audio/mpeg" "audio/wave" "audio/mp4"}
             :filepath trackpath
             :metadata ["_artist" "album" "_trackname"]}
-   :callback (fn [{:keys [trackname artist album filepath filename]}
-                  {access-token :ht-access-token
-                   email :email}]
+   :callback (fn [{:keys [trackname artist album filepath filename content-type]}
+                  {access-token :ht-access-token email :email}]
+               (println content-type)
                (db/save-file-upload {:display_name trackname
                                      :artist artist
                                      :album album
                                      :filepath filepath
                                      :filename filename
                                      :access_code (:id access-token)
+                                     :content_type content-type
                                      :file_type_id TYPE_TRACK})
                (response "Uploaded."))})
 
@@ -72,7 +73,7 @@
   {:config {:accepts #{"audio/mpeg" "audio/wave" "audio/mp4"}
             :filepath (fsf/fsroot "/mixes/{artist}")
             :metadata ["_artist" "_mixname"]}
-   :callback (fn [{:keys [artist mixname filepath filename]}
+   :callback (fn [{:keys [artist mixname filepath filename content-type]}
                   {access-token :ht-access-token
                    email :email}]
                (db/save-file-upload {:artist artist
@@ -80,6 +81,7 @@
                                      :filepath filepath
                                      :filename filename
                                      :access_code (:id access-token)
+                                     :content_type content-type
                                      :file_type_id TYPE_MIX})
                (response "Uploaded."))})
 
@@ -87,7 +89,7 @@
   {:config {:accepts #{"video/mp4"}
             :filepath (fsf/fsroot "/video/{artist}")
             :metadata ["_artist" "_videoname"]}
-   :callback (fn [{:keys [artist videoname filepath filename]}
+   :callback (fn [{:keys [artist videoname filepath filename content-type]}
                   {access-token :ht-access-token
                    email :email}]
                (db/save-file-upload {:artist artist
@@ -95,6 +97,7 @@
                                      :filepath filepath
                                      :filename filename
                                      :access_code (:id access-token)
+                                     :content_type content-type
                                      :file_type_id TYPE_VIDEO})
                (response "Uploaded."))})
 
@@ -102,7 +105,7 @@
   {:config {:accepts #{"image/png" "image/jpeg" "image/jpg"}
             :filepath (fsf/fsroot "/images/{artist}")
             :metadata ["_artist" "_imgname"]}
-   :callback (fn [{:keys [artist imgname filepath filename]}
+   :callback (fn [{:keys [artist imgname filepath filename content-type]}
                   {access-token :ht-access-token
                    email :email}]
                (db/save-file-upload {:artist artist
@@ -110,6 +113,7 @@
                                      :filepath filepath
                                      :filename filename
                                      :access_code (:id access-token)
+                                     :content_type content-type
                                      :file_type_id TYPE_IMAGE})
                (response "Uploaded."))})
 
@@ -181,7 +185,7 @@
                   io/input-stream)
       ;; toDo: save content-type to db and send back here
       response
-      (assoc :headers {"Content-Type" ""})))
+      (assoc :headers {"Content-Type" (:content_type file-upload)})))
 
 (defn get-file-by-id []
   (GET (apiroot "/file/:id") [id]
