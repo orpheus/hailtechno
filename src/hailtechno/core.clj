@@ -99,7 +99,7 @@
                (response "Uploaded."))})
 
 (def fsf-backend-video-upload
-  {:config {:accepts #{"video/mp4"}
+  {:config {:accepts #{"video/mp4" "video/quicktime"}
             :filepath (fsf/fsroot "/video/{artist}")
             :metadata ["_artist" "_videoname"]}
    :callback (fn [{:keys [artist videoname filepath filename content-type]} request]
