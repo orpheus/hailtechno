@@ -25,6 +25,10 @@
 (def imgpath   (fsf/fsroot "/images/{artist}"))
 (def vidpath   (fsf/fsroot "/video/{artist}"))
 
+(def TYPE_TRACK 0)
+(def TYPE_MIX 1)
+(def TYPE_IMAGE 2)
+(def TYPE_VIDEO 3)
 
 (defn upload-route [handler]
   (-> handler
@@ -58,7 +62,7 @@
                                      :filepath filepath
                                      :filename filename
                                      :access_code (:id access-token)
-                                     :file_type_id 0})
+                                     :file_type_id TYPE_TRACK})
                (response "Uploaded."))})
 
 (def fsf-backend-mix-upload
@@ -73,7 +77,7 @@
                                      :filepath filepath
                                      :filename filename
                                      :access_code (:id access-token)
-                                     :file_type_id 1})
+                                     :file_type_id TYPE_MIX})
                (response "OK"))})
 
 (def fsf-backend-video-upload
@@ -88,7 +92,7 @@
                                      :filepath filepath
                                      :filename filename
                                      :access_code (:id access-token)
-                                     :file_type_id 2})
+                                     :file_type_id TYPE_VIDEO})
                (response "Uploaded."))})
 
 (def fsf-backend-image-upload
@@ -103,7 +107,7 @@
                                      :filepath filepath
                                      :filename filename
                                      :access_code (:id access-token)
-                                     :file_type_id 3})
+                                     :file_type_id TYPE_IMAGE})
                (response "Uploaded."))})
 
 (def track-route
