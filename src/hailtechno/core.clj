@@ -44,10 +44,13 @@
 (defn create-upload-route [controller fsf-backend]
   (upload-route
    (POST controller request
-         (println "Start authorize-and-upload")
          (authorize-and-upload request fsf-backend))))
 
-;; add rollbacks if exception in callbacks
+;; toDo: Instead of saving the file upload to the db after the
+;; file system save, use a `callbefore` to save the data
+;; so that if it fails you don't have to waste time with the fs
+
+;; toDo: Add logging
 
 (def fsf-backend-track-upload
   {:config {:accepts #{"audio/mpeg" "audio/wave" "audio/mp4"}
@@ -78,7 +81,7 @@
                                      :filename filename
                                      :access_code (:id access-token)
                                      :file_type_id TYPE_MIX})
-               (response "OK"))})
+               (response "Uploaded."))})
 
 (def fsf-backend-video-upload
   {:config {:accepts #{"video/mp4"}
@@ -204,7 +207,8 @@
   track-route
   image-route
   mix-route
-  video-route)
+  video-route
+  )
 
 (defroutes public-routes
   (get-file-by-id)
@@ -219,7 +223,8 @@
   public-routes
   (login-route)
   (validate-access-token-route)
-  (route/not-found "<h1>404</h1>"))
+  (route/not-found "<h1>404</h1>")
+  )
 
 (def app
   (do (-> (handler/site all-routes))))
