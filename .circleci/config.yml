@@ -104,8 +104,8 @@ jobs:
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
   version: 2.1
-  # This is the name of the workflow, feel free to change it to better match your workflow.
-  CI:
+# Require manual action on branches for docker deploy
+  CI-Branch:
     # Inside the workflow, you define the jobs you want to run.
     jobs:
       - build-and-test
@@ -116,16 +116,23 @@ workflows:
       - docker-build:
           requires:
             - hold
+      - docker-publish:
+          requires:
+            - docker-build
+
+# Run automaticall on main
+  CI-Main:
+    jobs:
+      - build-and-test
+      - docker-build:
+          requires:
+            - build-and-test
           filters:
-            branches:
-              ignore: /^.*/
             tags:
               only: /^\d+\.\d+\.\d+$/
       - docker-publish:
           requires:
             - docker-build
           filters:
-            branches:
-              ignore: /^.*/
             tags:
               only: /^\d+\.\d+\.\d+$/
