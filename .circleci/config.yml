@@ -124,7 +124,6 @@ workflows:
       - docker-publish:
           requires:
             - docker-build
-            - hold
           filters:
             branches:
               ignore: /^.*/
