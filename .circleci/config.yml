@@ -16,7 +16,7 @@ commands:
       - save_cache:
           paths:
             - ~/.m2
-          key: v1-dependencies-{{ checksum "prpoject.clj" }}
+          key: v1-dependencies-{{ checksum "project.clj" }}
 
   build:
     steps:
