@@ -1,18 +1,23 @@
 (ns hailtechno.db
   (:require [clojure.string :as str]
             [clojure.tools.logging :as log]
+            [environ.core :refer [env]]
             [hailtechno.util :refer [current-timestamp]]
             [next.jdbc :as jdbc]
             [next.jdbc.result-set :as rs]
             [next.jdbc.sql :refer [insert! query]]
             [next.jdbc.sql.builder :as sql-builder]))
 
+(println "db-name" (env :db-name))
+(println "db-host" (env :db-host))
+
 (def db-config {:dbtype "postgres"
-                :dbname "hailtechno"
-                :user "postgres"})
+                :user "postgres"
+                :dbname (env :db-name)
+                :host (env :db-host)
+                :port 5432})
 
 (def ds (jdbc/get-datasource db-config))
-(def conn (jdbc/get-connection ds))
 
 ;; Helpers
 (def opts {:builder-fn rs/as-unqualified-lower-maps})

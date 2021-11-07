@@ -1,6 +1,7 @@
 (ns hailtechno.core
   (:gen-class)
-  (:use [compojure.core])
+  (:use [compojure.core]
+        [ring.adapter.jetty])
   (:require [buddy.auth :refer [authenticated? throw-unauthorized]]
             [compojure.core :refer :all]
             [compojure.route :as route]
@@ -222,7 +223,7 @@
           (let [access-token (armor/validate-access-header request)
                 email (get-in request [:body "email"])]
             ;; just auto-save email addresses for now
-            (db/save-user-if-not-exists email)
+            (db/force-get-or-save-user email)
             (if (response? access-token)
               access-token
               (-> (json/write-str access-token)
@@ -260,4 +261,8 @@
   )
 
 (def app
-  (do (-> (handler/site all-routes))))
+  (handler/site all-routes))
+
+(defn -main [& args]
+  (println "Service started on port 3000")
+  (run-jetty (handler/site all-routes) {:port 3000}))

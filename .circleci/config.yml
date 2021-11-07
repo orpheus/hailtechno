@@ -4,54 +4,142 @@
 # https://circleci.com/docs/2.0/language-clojure/ for more details
 version: 2.1
 
-# Define a job to be invoked later in a workflow.
-# See: https://circleci.com/docs/2.0/configuration-reference/#jobs
-jobs:
-  build:
-    # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
-    # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
-    docker:
-      # specify the version you desire here
-      - image: circleci/clojure:lein-2.9.5
-
-      # Specify service dependencies here if necessary
-      # CircleCI maintains a library of pre-built images
-      # documented at https://circleci.com/docs/2.0/circleci-images/
-      # - image: circleci/postgres:9.4
-
-    working_directory: ~/repo
-
-    environment:
-      LEIN_ROOT: "true"
-      # Customize the JVM maximum heap limit
-      JVM_OPTS: -Xmx3200m
-
-    # Add steps to the job
-    # See: https://circleci.com/docs/2.0/configuration-reference/#steps
+commands:
+  restore_cache_cmd:
     steps:
-      - checkout
-
-      # Download and cache dependencies
       - restore_cache:
           keys:
             - v1-dependencies-{{ checksum "project.clj" }}
-            # fallback to using the latest cache if no exact match is found
-            - v1-dependencies-
-
-      - run: lein deps
-
+            - vi-dependencies-
+  save_cache_cmd:
+    steps:
       - save_cache:
           paths:
             - ~/.m2
           key: v1-dependencies-{{ checksum "project.clj" }}
 
-      # run tests!
-      #- run: lein test
+  build:
+    steps:
+      - checkout
+      - restore_cache_cmd
+      - run: lein deps
+      - save_cache_cmd
 
-# Invoke jobs via workflows
+executors:
+  clojure-executor:
+    docker:
+      - image: circleci/clojure:lein-2.9.5
+
+  docker-publisher:
+    working_directory: ~/hailtechno # directory where steps will run
+    environment:
+      IMAGE_NAME: hailtechno/hailtechno
+    docker:
+      - image: circleci/buildpack-deps:stretch
+
+
+# Define a job to be invoked later in a workflow.
+# See: https://circleci.com/docs/2.0/configuration-reference/#jobs
+jobs:
+  build-and-test:
+    executor: clojure-executor
+    working_directory: ~/hailtechno
+    environment:
+      LEIN_ROOT: "true"
+      # Customize the JVM maximum heap limit
+      JVM_OPTS: -Xmx3200m
+    steps:
+      - checkout
+      - build
+      - run:
+          name: Build Ubjar
+          command: lein do clean, uberjar
+      - run:
+          name: Lein Tests
+          command: echo "Test me"
+
+      - persist_to_workspace:
+         root: ~/hailtechno
+         paths:
+           - target
+
+  docker-build:
+    executor: docker-publisher
+    steps:
+      - checkout
+      - setup_remote_docker
+      - attach_workspace:
+          at: .
+      - run:
+          name: Build latest Docker image
+          command: docker build . -t $IMAGE_NAME:latest
+      # - run:
+      #     name: Build tagged Docker iamge
+      #     command: docker built . -t $IMAGE_NAME:${CIRCLE_TAG}
+      - run:
+          name: Archive Docker Image
+          command: docker save -o image.tar $IMAGE_NAME
+      - persist_to_workspace:
+          root: ~/hailtechno
+          paths:
+            - ./image.tar
+
+  docker-publish:
+    executor: docker-publisher
+    steps:
+      - attach_workspace:
+          at: .
+      - setup_remote_docker
+      - run:
+          name: Load archived Docker image
+          command: docker load -i image.tar
+      - run:
+          name: Publish Docker Image to Docker Hub
+          command: |
+            echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+            docker push $IMAGE_NAME:latest
+            # docker push $IMAGE_NAME:${CIRCLE_TAG}
+
+# Workflow Filters
+wf-filters:
+  only-main: &only-main
+    branches:
+      only: main
+  only-main-and-tags: &only-main-and-tags
+    branches:
+      only: main
+    tags:
+      only: /^\d+\.\d+\.\d+$/
+
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
-  sample: # This is the name of the workflow, feel free to change it to better match your workflow.
+  version: 2.1
+# Require manual action on branches for docker deploy
+  CI-Branch:
     # Inside the workflow, you define the jobs you want to run.
     jobs:
-      - build
+      - build-and-test
+      - Approve Docker Build And Publish:
+          requires:
+            - build-and-test
+          type: approval
+      - docker-build:
+          requires:
+            - Approve Docker Build And Publish
+      - docker-publish:
+          requires:
+            - docker-build
+
+# Run automaticall on main
+  CI-Main:
+    jobs:
+      - build-and-test:
+          filters: *only-main
+      - docker-build:
+          requires:
+            - build-and-test
+          filters: *only-main-and-tags
+      - docker-publish:
+          requires:
+            - docker-build
+          filters: *only-main-and-tags
