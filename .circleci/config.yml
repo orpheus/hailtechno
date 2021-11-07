@@ -44,7 +44,7 @@ jobs:
       JVM_OPTS: -Xmx3200m
     steps:
       - checkout
-      - restore_cache_cmd
+      - build
       - run: |
          lein clean
          lein uberjar
@@ -64,7 +64,6 @@ jobs:
     # Add steps to the job
     # See: https://circleci.com/docs/2.0/configuration-reference/#steps
     steps:
-      - build
       # - run: lein test
 
   # Invoke jobs via workflows
