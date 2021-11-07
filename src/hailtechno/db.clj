@@ -18,9 +18,6 @@
                 :port 5432})
 
 (def ds (jdbc/get-datasource db-config))
-(def conn
-  ;(jdbc/get-connection ds)
-  )
 
 ;; Helpers
 (def opts {:builder-fn rs/as-unqualified-lower-maps})
