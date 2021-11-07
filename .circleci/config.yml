@@ -29,7 +29,7 @@ commands:
 executors:
   clojure-executor:
     docker:
-      - image: circlei/clojure:lein-2.9.5
+      - image: circleci/clojure:lein-2.9.5
 
 
 # Define a job to be invoked later in a workflow.
