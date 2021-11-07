@@ -63,7 +63,7 @@ jobs:
          paths:
            - target
 
-  deploy-docker:
+  build-docker:
     executor: docker-publisher
     steps:
       - checkout
@@ -83,4 +83,6 @@ workflows:
     # Inside the workflow, you define the jobs you want to run.
     jobs:
       - build-and-test
-      - deploy-docker
+      - build-docker:
+          requires:
+            - build-and-test
