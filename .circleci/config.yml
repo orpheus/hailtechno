@@ -115,7 +115,7 @@ workflows:
           type: approval
       - docker-build:
           requires:
-            - hold
+            - docker-build-and-push?
           filters:
             branches:
               ignore: /^.*/
