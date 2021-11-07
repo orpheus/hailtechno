@@ -63,7 +63,7 @@ jobs:
          paths:
            - target
 
-  build-docker:
+  docker-build:
     executor: docker-publisher
     steps:
       - checkout
@@ -84,7 +84,7 @@ jobs:
           paths:
             - ./image.tar
 
-  publish-docker:
+  docker-publish:
     executor: docker-publisher
     steps:
       - attach_workspace:
@@ -108,6 +108,9 @@ workflows:
     # Inside the workflow, you define the jobs you want to run.
     jobs:
       - build-and-test
-      - build-docker:
+      - docker-build:
           requires:
             - build-and-test
+      - docker-publish:
+          requires:
+            - docker-build
