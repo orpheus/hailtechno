@@ -22,8 +22,7 @@ commands:
     steps:
       - checkout
       - restore_cache_cmd
-      - run: |
-          lein deps
+      - run: lein deps
       - save_cache_cmd
 
 executors:
@@ -42,7 +41,7 @@ executors:
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
 jobs:
-  build:
+  build-and-test:
     executor: clojure-executor
     working_directory: ~/hailtechno
     environment:
@@ -55,33 +54,33 @@ jobs:
       - run:
           name: Build Ubjar
           command: lein do clean, uberjar
+      - run:
+          name: Lein Tests
+          command: echo "Test me"
 
       - persist_to_workspace:
          root: ~/hailtechno
          paths:
            - target
 
-  test:
-  # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
-    # See: https://circleci.com/docs/2.0/configuration-reference/#docker-machine-macos-windows-executor
-    executor: clojure-executor
-
-    working_directory: ~/repo
-
-    environment:
-      LEIN_ROOT: "true"
-      # Customize the JVM maximum heap limit
-      JVM_OPTS: -Xmx3200m
-
-    # Add steps to the job
-    # See: https://circleci.com/docs/2.0/configuration-reference/#steps
+  deploy-docker:
+    executor: docker-publisher
     steps:
-      - run: echo "Test me"
+      - checkout
+      - setup_remote_docker
+      - attach_workspace:
+          at: .
+      - run: |
+          ls
+      # - run:
+      #     name: Build latest Docker image
+      #     command: docker build . -t $IMAGE_NAME:latest
 
-  # Invoke jobs via workflows
+# Invoke jobs via workflows
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
   build-test-deploy: # This is the name of the workflow, feel free to change it to better match your workflow.
     # Inside the workflow, you define the jobs you want to run.
     jobs:
-      - build
+      - build-and-test
+      - deploy-docker
