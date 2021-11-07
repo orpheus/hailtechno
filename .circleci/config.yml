@@ -31,6 +31,13 @@ executors:
     docker:
       - image: circleci/clojure:lein-2.9.5
 
+  docker-publisher:
+    working_directory: ~/hailtechno # directory where steps will run
+    environment:
+      IMAGE_NAME: hailtechno/hailtechno
+    docker:
+      - image: circleci/buildpack-deps:stretch
+
 
 # Define a job to be invoked later in a workflow.
 # See: https://circleci.com/docs/2.0/configuration-reference/#jobs
@@ -48,6 +55,11 @@ jobs:
       - run: |
          lein clean
          lein uberjar
+
+      - persist_to_workspace:
+         root: ~/hailtechno
+         paths:
+           - target
 
   test:
   # Specify the execution environment. You can specify an image from Dockerhub or use one of our Convenience Images from CircleCI's Developer Hub.
