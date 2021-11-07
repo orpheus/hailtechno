@@ -70,16 +70,41 @@ jobs:
       - setup_remote_docker
       - attach_workspace:
           at: .
-      - run: |
-          ls
+      - run:
+          name: Build latest Docker image
+          command: docker build . -t $IMAGE_NAME:latest
       # - run:
-      #     name: Build latest Docker image
-      #     command: docker build . -t $IMAGE_NAME:latest
+      #     name: Build tagged Docker iamge
+      #     command: docker built . -t $IMAGE_NAME:${CIRCLE_TAG}
+      - run:
+          name: Archive Docker Image
+          command: docker save -o image.tar $IMAGE_NAME
+      - persist_to_workspace:
+          root: ~/hailtechno
+          paths:
+            - ./image.tar
 
-# Invoke jobs via workflows
+  publish-docker:
+    executor: docker-publisher
+    steps:
+      - attach_workspace:
+          at: .
+      - setup_remote_docker
+      - run:
+          name: Load archived Docker image
+          command: docker load -i image.tar
+      - run:
+          name: Publish Docker Image to Docker Hub
+          command: |
+            echo "${DOCKER_PASS}" | docker login -u "${DOCKER_USER}" --password-stdin
+            docker push $IMAGE_NAME:latest
+            # docker push $IMAGE_NAME:${CIRCLE_TAG}
+
+
 # See: https://circleci.com/docs/2.0/configuration-reference/#workflows
 workflows:
-  build-test-deploy: # This is the name of the workflow, feel free to change it to better match your workflow.
+  # This is the name of the workflow, feel free to change it to better match your workflow.
+  CI:
     # Inside the workflow, you define the jobs you want to run.
     jobs:
       - build-and-test

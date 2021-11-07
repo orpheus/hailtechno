@@ -2,7 +2,7 @@ FROM openjdk:8u181-alpine3.8
 
 WORKDIR /
 
-COPY target/uberjar/hailtechno-0.1.0-standalone.jar hailtechno.jar
+COPY target/uberjar/hailtechno-*-standalone.jar hailtechno.jar
 EXPOSE 3000
 
 ENV DB_HOST=host.docker.internal
