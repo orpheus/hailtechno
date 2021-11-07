@@ -109,13 +109,13 @@ workflows:
     # Inside the workflow, you define the jobs you want to run.
     jobs:
       - build-and-test
-      - docker-build-and-push?:
+      - hold:
           requires:
             - build-and-test
           type: approval
       - docker-build:
           requires:
-            - docker-build-and-push?
+            - hold
           filters:
             branches:
               ignore: /^.*/
@@ -124,6 +124,7 @@ workflows:
       - docker-publish:
           requires:
             - docker-build
+            - hold
           filters:
             branches:
               ignore: /^.*/
