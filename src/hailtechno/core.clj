@@ -267,7 +267,7 @@
 
 (def app
   (-> all-routes
-      (wrap-cors :access-control-allow-origin #".*localhost.*"
+      (wrap-cors :access-control-allow-origin #".*"
                  :access-control-allow-methods [:get :put :post :delete])
       (handler/site)))
 
