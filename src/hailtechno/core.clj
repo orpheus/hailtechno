@@ -275,7 +275,9 @@
 
 
 (defn -main [& args]
-  (migrations/miginit)
+  (println "Starting migrations.")
+  (migrations/miginit)                                      ;; toDo: how not to init everytime?
   (migrations/migrate)
-  (println "Service started on port 3000")
+  (println "End migrations.")
+  (println "Service starting on port 3000")
   (run-jetty app {:port 3000}))

@@ -15,7 +15,7 @@
                 :user "postgres"
                 :dbname (env :db-name)
                 :host (env :db-host)
-                :pas (env :db-pass)
+                :password (env :db-pass)
                 :port 5432})
 
 (def ds (jdbc/get-datasource db-config))
