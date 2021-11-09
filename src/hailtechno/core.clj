@@ -14,6 +14,8 @@
             [hailtechno.db :as db]
             [hailtechno.fsf :as fsf]
             [hailtechno.util :as util]
+            [ring.middleware.cors :refer [wrap-cors]]
+            [ring.middleware.defaults :as site]
             [ring.middleware.json :as ring-json]
             [ring.middleware.multipart-params :refer [wrap-multipart-params]]
             [ring.util.response :refer [response bad-request response?]])
@@ -257,8 +259,7 @@
   upload-routes
   public-routes
   (validate-access-token-route)
-  (route/not-found "<h1>404</h1>")
-  )
+  (route/not-found "<h1>404</h1>"))
 
 (def app
   (-> all-routes
@@ -266,6 +267,9 @@
                  :access-control-allow-methods [:get :put :post :delete])
       (handler/site)))
 
+
+
+
 (defn -main [& args]
   (println "Service started on port 3000")
-  (run-jetty (handler/site all-routes) {:port 3000}))
+  (run-jetty app {:port 3000}))
