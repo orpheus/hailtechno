@@ -63,7 +63,7 @@
 ;; toDo: Add logging
 
 (def fsf-backend-track-upload
-  {:config {:accepts #{"audio/mpeg" "audio/wave" "audio/mp4"}
+  {:config {:accepts #{"audio/mpeg" "audio/wave" "audio/mp4" "audio/wav"}
             :filepath trackpath
             :metadata ["_artist" "album" "_trackname"]}
    :callback (fn [{:keys [trackname artist album filepath filename content-type]} request]
@@ -261,7 +261,10 @@
   )
 
 (def app
-  (handler/site all-routes))
+  (-> all-routes
+      (wrap-cors :access-control-allow-origin #".*localhost.*"
+                 :access-control-allow-methods [:get :put :post :delete])
+      (handler/site)))
 
 (defn -main [& args]
   (println "Service started on port 3000")
