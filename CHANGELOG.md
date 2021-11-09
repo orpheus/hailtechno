@@ -4,7 +4,15 @@ All notable changes to this project will be documented in this file. This change
 ## [Unreleased]
 ### Changed
 
-## [0.1.0] - 2021-NOV-**
+## [Unrleased] - 2021-NOV-08
+### Changed
+ - CI-Branch worflow not run on main/remove docker actions
+
+### Added
+ - CORS wrapper for all handlers
+ - content-type: audio/wav
+
+## [Unreleased] - 2021-NOV-07
 
 ### Added
  - Route handlers for file upload
