@@ -20,4 +20,4 @@
   (migratus/create migconfig name))
 
 (defn migrollback []
-  (migratus/rollback))
+  (migratus/rollback migconfig))
