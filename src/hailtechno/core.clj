@@ -13,6 +13,7 @@
             [hailtechno.auth :as auth]
             [hailtechno.db :as db]
             [hailtechno.fsf :as fsf]
+            [hailtechno.migrations :as migrations]
             [hailtechno.util :as util]
             [ring.middleware.cors :refer [wrap-cors]]
             [ring.middleware.defaults :as site]
@@ -85,7 +86,7 @@
 
 (def fsf-backend-mix-upload
   {:config {:accepts #{"audio/mpeg" "audio/wave" "audio/mp4"}
-            :filepath (fsf/fsroot "/mixes/{artist}")
+            :filepath mixpath
             :metadata ["_artist" "_mixname"]}
    :callback (fn [{:keys [artist mixname filepath filename content-type]} request]
                (let [access-code (armor/get-access-code request)
@@ -103,7 +104,7 @@
 
 (def fsf-backend-video-upload
   {:config {:accepts #{"video/mp4" "video/quicktime"}
-            :filepath (fsf/fsroot "/video/{artist}")
+            :filepath vidpath
             :metadata ["_artist" "_videoname"]}
    :callback (fn [{:keys [artist videoname filepath filename content-type]} request]
                (let [access-code (armor/get-access-code request)
@@ -121,7 +122,7 @@
 
 (def fsf-backend-image-upload
   {:config {:accepts #{"image/png" "image/jpeg" "image/jpg"}
-            :filepath (fsf/fsroot "/images/{artist}")
+            :filepath imgpath
             :metadata ["_artist" "_imgname"]}
    :callback (fn [{:keys [artist imgname filepath filename content-type]} request]
                (let [access-code (armor/get-access-code request)
@@ -239,12 +240,15 @@
             (throw-unauthorized))
           (response "toDo: create JWT"))))
 
+(defn health-check []
+  (GET "/health" _
+    (response "Healthy")))
+
 (defroutes upload-routes
   track-route
   image-route
   mix-route
-  video-route
-  )
+  video-route)
 
 (defroutes public-routes
   (get-file-by-id)
@@ -253,7 +257,7 @@
   (get-images)
   (get-video)
   (test-route)
-  )
+  (health-check))
 
 (defroutes all-routes
   upload-routes
@@ -271,5 +275,7 @@
 
 
 (defn -main [& args]
+  (migrations/miginit)
+  (migrations/migrate)
   (println "Service started on port 3000")
   (run-jetty app {:port 3000}))

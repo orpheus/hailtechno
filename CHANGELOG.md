@@ -6,11 +6,14 @@ All notable changes to this project will be documented in this file. This change
 
 ## [Unrleased] - 2021-NOV-08
 ### Changed
- - CI-Branch worflow not run on main/remove docker actions
+ - CI-Branch workflow not run on main/remove docker actions
+ - run migrations on `-main`
 
 ### Added
  - CORS wrapper for all handlers
  - content-type: audio/wav
+ - k8 deployment templates
+ - healthcheck endpoint
 
 ## [Unreleased] - 2021-NOV-07
 

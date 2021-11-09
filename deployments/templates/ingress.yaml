@@ -1,0 +1,32 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: hailtechno-dev-ingress
+  annotations:
+    kubernetes.io/ingress.allow-http: “false”
+    nginx.ingress.kubernetes.io/rewrite-target: /*
+    nginx.ingress.kubernetes.io/use-regex: “true”
+spec:
+  tls:
+    - secretName: hailtechno-tls
+  rules:
+    - host: hailtechno-svc.hailtechno.com
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: hailtechno-service
+                port:
+                  number: 3000
+    - host: hailtechno.hailtechno.com
+      http:
+        paths:
+          - path: /*
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: hailtechno-service
+                port:
+                  number: 8080

@@ -13,6 +13,7 @@ CREATE TABLE IF NOT EXISTS file_type (
      --;;
 INSERT INTO file_type VALUES
        (0, 'track'), (1, 'mix'), (2, 'image'), (3, 'video')
+       ON CONFLICT DO NOTHING
        ;
     --;;
 CREATE TABLE IF NOT EXISTS access_token (
@@ -40,7 +41,7 @@ CREATE TABLE IF NOT EXISTS file_upload (
        access_code uuid REFERENCES access_token(id)
        );
 --;;
-CREATE VIEW vw_access_token_usage AS
+CREATE OR REPLACE VIEW vw_access_token_usage AS
 SELECT id as access_code, user_id, file_type_id, max_upload_count, date_exp,
        COALESCE(T2.upload_count, 0) as upload_count
 FROM access_token T1
