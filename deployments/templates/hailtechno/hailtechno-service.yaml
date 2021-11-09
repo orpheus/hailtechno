@@ -12,4 +12,4 @@ spec:
     targetPort: 3000
   selector:
     app: "hailtechno"
-  type: "LoadBalancer"
+  type: "ClusterIP"
