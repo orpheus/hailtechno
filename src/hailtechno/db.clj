@@ -12,7 +12,7 @@
 (println "db-host" (env :db-host))
 
 (def db-config {:dbtype "postgres"
-                :user "postgres"
+                :user (env :db-user)
                 :dbname (env :db-name)
                 :host (env :db-host)
                 :password (env :db-pass)

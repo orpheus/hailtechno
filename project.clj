@@ -1,8 +1,8 @@
 (defproject hailtechno "0.1.0"
-  :description "FIXME: write description"
-  :url "http://example.com/FIXME"
-  :license {:name "EPL-2.0 OR GPL-2.0-or-later WITH Classpath-exception-2.0"
-            :url "https://www.eclipse.org/legal/epl-2.0/"}
+  :description "Personal web server for music upload and streaming. I wanted somewhere to upload my music without paying the \nSoundCloud subscription."
+  :url "https://github.com/orpheus/hailtechno"
+  :license {:name "The GNU General Public License v3.0"
+            :url "https://www.gnu.org/licenses/gpl-3.0.en.html"}
   :dependencies [[buddy/buddy-auth "3.0.1"]
                  [compojure/compojure "1.6.2"]
                  [com.github.seancorfield/next.jdbc "1.2.724"]

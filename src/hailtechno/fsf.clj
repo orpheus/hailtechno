@@ -1,3 +1,4 @@
+;; fsf: filesystem framework
 (ns hailtechno.fsf
   (:require [clojure.java.io :as io]
             [clojure.string :as str]
